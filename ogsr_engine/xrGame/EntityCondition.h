@@ -1,20 +1,35 @@
 #pragma once
 
-class CWound;
-class NET_Packet;
-class CEntityAlive;
-class CLevel;
-
+#include "alife_space.h"
 #include "hit_immunity.h"
 #include "Hit.h"
 #include "Level.h"
 
+class CLevel;
+class CWound;
+class NET_Packet;
+class CEntityAlive;
 class CEntityCondition;
+
+using namespace ALife;
+
+struct SEntityConditionUI
+{
+    float passed_time;
+    float accum_val;
+};
+
+struct SEntityConditionVal
+{
+    float cur;
+    float min;
+    float max;
+    float speed;
+    float deltas;
+};
+
 class CEntityConditionSimple
 {
-    float m_fHealth;
-    float m_fHealthMax;
-
 public:
     CEntityConditionSimple();
     virtual ~CEntityConditionSimple();
@@ -24,171 +39,159 @@ public:
     IC float& health() { return m_fHealth; }
     IC float& max_health() { return m_fHealthMax; }
 
-    virtual CEntityCondition* cast_entity_condition() { return NULL; }
+private:
+    float m_fHealth;
+    float m_fHealthMax;
 };
 
 class CEntityCondition : public CEntityConditionSimple, public CHitImmunity
 {
-private:
-    bool m_use_limping_state;
-    CEntityAlive* m_object;
-
 public:
+    DEFINE_VECTOR(CWound*, WOUND_VECTOR, WOUND_VECTOR_IT);
+
     CEntityCondition(CEntityAlive* object);
     virtual ~CEntityCondition(void);
+    virtual void reinit();
 
+    /**************** BASE functions ****************/
     virtual void LoadCondition(LPCSTR section);
-    virtual void remove_links(const CObject* object);
-
     virtual void save(NET_Packet& output_packet);
     virtual void load(IReader& input_packet);
+    virtual void remove_links(const CObject* object);
+    static void script_register(lua_State* L);
 
-    IC float GetPower() const { return m_fPower; }
-    IC float GetRadiation() const { return m_fRadiation; }
-    IC float GetPsyHealth() const { return m_fPsyHealth; }
-    IC float GetEntityMorale() const { return m_fEntityMorale; }
-    virtual float GetAlcohol() { return 0.f; }
-    virtual float GetSatiety() { return 0.f; }
-    virtual float GetThirst() { return 0.f; }
+    float& par_value(LPCSTR name);
+    void par_load(LPCSTR sect, LPCSTR prefix);
+    SEntityConditionVal* mcondv() { return m_conds; }
 
-    IC float GetHealthLost() const { return m_fHealthLost; }
+    /**************** GET user functions ****************/
 
-    void ChangeHealth(float value);
-    void ChangePower(float value);
-    void ChangeRadiation(float value);
-    void ChangePsyHealth(float value);
-    virtual void ChangeSatiety(float value){};
-    virtual void ChangeAlcohol(float value){};
-    virtual void ChangeThirst(float value){};
+    //current
+    float GetValue(ECondType val_type) const { return ((val_type == eCondTypeHealth) ? GetHealth() : m_conds[val_type].cur); }
+    IC virtual float GetPower() const { return GetValue(eCondTypePower); }
+    IC virtual float GetRadiation() const { return GetValue(eCondTypeRadiation); }
+    IC virtual float GetPsyHealth() const { return GetValue(eCondTypePsyHealth); }
+    IC virtual float GetAlcohol() const { return GetValue(eCondTypeAlcohol); }
+    IC virtual float GetSatiety() const { return GetValue(eCondTypeSatiety); }
+    IC virtual float GetThirst() const { return GetValue(eCondTypeThirst); }
+    IC virtual float GetEntityMorale() const { return GetValue(eCondTypeMorale); }
 
-    IC void SetMaxPower(float val)
+    //max
+    IC float GetMaxValue(ECondType val_type) const { return m_conds[val_type].max; }
+    IC float GetMaxPower() const { return GetMaxValue(eCondTypePower); };
+
+    /**************** GET LVAL user functions ****************/
+
+    //current
+    IC float& value(ECondType val_type) { return m_conds[val_type].cur; }
+    IC float& power() { return value(eCondTypePower); }
+    IC float& radiation() { return value(eCondTypeRadiation); }
+
+    //max
+    IC float& value_max(ECondType val_type) { return m_conds[val_type].max; }
+    
+    /**************** SET user functions ****************/
+
+    //current
+    void SetValue(ECondType val_type, float value) { ((val_type == eCondTypeHealth) ? health() : m_conds[val_type].cur) = value; }
+
+
+    /**************** CHANGE user functions ****************/
+    void ChangeValue( ECondType val_type, float value )
     {
-        m_fPowerMax = val;
-        clamp(m_fPowerMax, 0.1f, 1.0f);
-    };
-    IC float GetMaxPower() const { return m_fPowerMax; };
+        if (val_type == eCondTypeHealth && CanBeHarmed() == false)
+            return;
 
+        VERIFY(_valid(value));
+        m_conds[val_type].deltas += value;
+    }
+    virtual void ChangeHealth(float value) { ChangeValue(eCondTypeHealth, value); }
+    virtual void ChangePower(float value) { ChangeValue(eCondTypePower, value); }
+    virtual void ChangeRadiation(float value) { ChangeValue(eCondTypeRadiation, value); }
+    virtual void ChangePsyHealth(float value) { ChangeValue(eCondTypePsyHealth, value); }
+    virtual void ChangeAlcohol(float value) { ChangeValue(eCondTypeAlcohol, value); };
+    virtual void ChangeSatiety(float value) { ChangeValue(eCondTypeSatiety, value); };
+    virtual void ChangeThirst(float value) { ChangeValue(eCondTypeThirst, value); };
+    virtual void ChangeEntityMorale(float value) { ChangeValue(eCondTypeMorale, value); }
     void ChangeBleeding(float percent);
 
-    void ChangeEntityMorale(float value);
-
+    /**************** OTHER user functions ****************/
+    IC float GetHealthLost() const { return m_fHealthLost; }
+    IC void SetMaxPower(float val) { clamp(val, 0.1f, 1.0f); m_conds[eCondTypePower].max = val; };
     virtual CWound* ConditionHit(SHit* pHDS);
-    //обновления состояния с течением времени
+    IC const float fdelta_time() const { return (m_fDeltaTime); }
+    IC float& hit_bone_scale() { return (m_fHitBoneScale); }
+    IC float& wound_bone_scale() { return (m_fWoundBoneScale); }
+
+    /**************** WOUND user functions ****************/
+    CWound* AddWound(float hit_power, ALife::EHitType hit_type, u16 element);
+    IC const WOUND_VECTOR& wounds() const { return (m_WoundVector); }
+    float BleedingSpeed();
+    void ClearWounds();
+
+    // Обновления состояния с течением времени
     virtual void UpdateCondition();
+    void UpdateHealth();
     void UpdateWounds();
     void UpdateConditionTime();
     IC void SetConditionDeltaTime(float DeltaTime) { m_fDeltaTime = DeltaTime; };
-
-    virtual void UpdatePower();
-
-    //скорость потери крови из всех открытых ран
-    float BleedingSpeed();
-
+    
+    // WHO functions
     CObject* GetWhoHitLastTime() { return m_pWho; }
     u16 GetWhoHitLastTimeID() { return m_iWhoID; }
 
-    CWound* AddWound(float hit_power, ALife::EHitType hit_type, u16 element);
-
+    // Can be harmed?
     IC void SetCanBeHarmedState(bool CanBeHarmed) { m_bCanBeHarmed = CanBeHarmed; }
-    IC bool CanBeHarmed() const { return m_bCanBeHarmed; };
-
-    void ClearWounds();
+    IC bool CanBeHarmed() const { return m_bCanBeHarmed; }
 
 protected:
-    void UpdateHealth();
-    void UpdateSatiety(float k = 1.0f);
-    void UpdateRadiation(float k = 1.0f);
-    void UpdatePsyHealth(float k = 1.0f);
-
-    void UpdateEntityMorale();
-
-    //изменение силы хита в зависимости от надетого костюма
-    //(только для InventoryOwner)
+    // изменение силы хита в зависимости от надетого костюма (только для InventoryOwner)
     float HitOutfitEffect(float hit_power, ALife::EHitType hit_type, s16 element, float AP);
-    //изменение потери сил в зависимости от надетого костюма
+    // изменение потери сил в зависимости от надетого костюма
     float HitPowerEffect(float power_loss);
 
-    //для подсчета состояния открытых ран,
-    //запоминается кость куда был нанесен хит
-    //и скорость потери крови из раны
-    DEFINE_VECTOR(CWound*, WOUND_VECTOR, WOUND_VECTOR_IT);
+    // для подсчета состояния открытых ран, запоминается кость куда был нанесен хит и скорость потери крови из раны
+    
     WOUND_VECTOR m_WoundVector;
-    //очистка массива ран
 
-    //все величины от 0 до 1
-    float m_fPower; //сила
-    float m_fRadiation; //доза радиактивного облучения
-    float m_fPsyHealth; //здоровье
+    // величины
+    bool m_conds_active[ALife::eCondTypeMax];
+    SEntityConditionVal m_conds[ALife::eCondTypeMax];
+    SEntityConditionUI m_conds_UI[ALife::eCondTypeMax];
 
-    float m_fEntityMorale; //мораль
-
-    //максимальные величины
-    float m_fPowerMax;
-    float m_fRadiationMax;
-    float m_fPsyHealthMax;
-
-    float m_fEntityMoraleMax;
-
-    //величины изменения параметров на каждом обновлении
-    float m_fDeltaHealth;
-    float m_fDeltaPower;
-    float m_fDeltaRadiation;
-    float m_fDeltaPsyHealth;
-    float m_fDeltaEntityMorale{};
-
-    struct SConditionChangeV
-    {
-        const static int PARAMS_COUNT = 7;
-
-        float m_fV_Radiation;
-        float m_fV_PsyHealth;
-        float m_fV_EntityMorale;
-        float m_fV_RadiationHealth;
-        float m_fV_Bleeding;
-        float m_fV_WoundIncarnation;
-        float m_fV_HealthRestore;
-        float& value(LPCSTR name);
-        void load(LPCSTR sect, LPCSTR prefix);
-    };
-
-    SConditionChangeV m_change_v{};
-
+    // величины кастом
+    float m_fV_RadiationHealth;
+    float m_fV_Bleeding;
+    float m_fV_WoundIncarnation;
     float m_fMinWoundSize;
     bool m_bIsBleeding;
 
-    //части хита, затрачиваемые на уменьшение здоровья и силы
+    // части хита, затрачиваемые на уменьшение здоровья и силы
     float m_fHealthHitPart[ALife::eHitTypeMax]{};
     float m_fPowerHitPart;
 
-    //потеря здоровья от последнего хита
+    // потеря здоровья и силы от последнего хита
     float m_fHealthLost;
+    float m_fPowerLost;
 
-    //для отслеживания времени
+    // для отслеживания времени
     u64 m_iLastTimeCalled;
     float m_fDeltaTime{};
-    //кто нанес последний хит
+    // кто нанес последний хит
     CObject* m_pWho;
     u16 m_iWhoID;
 
-    //для передачи параметров из DamageManager
+    // для передачи параметров из DamageManager
     float m_fHitBoneScale;
     float m_fWoundBoneScale;
-
-    float m_limping_threshold{};
 
     bool m_bTimeValid;
     bool m_bCanBeHarmed;
 
-public:
-    virtual void reinit();
+private:
+    void reinit_deltas();
+    void reinit_vals();
+    void reinit_vals_UI();
 
-    IC const float fdelta_time() const { return (m_fDeltaTime); }
-    IC const WOUND_VECTOR& wounds() const { return (m_WoundVector); }
-    IC float& radiation() { return (m_fRadiation); }
-    IC float& hit_bone_scale() { return (m_fHitBoneScale); }
-    IC float& wound_bone_scale() { return (m_fWoundBoneScale); }
-    virtual CEntityCondition* cast_entity_condition() { return this; }
-    static void script_register(lua_State* L);
-    virtual float GetParamByName(LPCSTR name);
-    IC SConditionChangeV& GetChangeValues() { return m_change_v; }
+    CEntityAlive* m_object;
 };

@@ -308,15 +308,6 @@ void CEntityAlive::Die(CObject* who)
         self->spatial.type &= ~STYPE_REACTTOSOUND;
 }
 
-//вывзывает при подсчете хита
-float CEntityAlive::CalcCondition(float /**hit/**/)
-{
-    conditions().UpdateCondition();
-
-    // dont call inherited::CalcCondition it will be meaningless
-    return conditions().GetHealthLost(); //*100.f;
-}
-
 ///////////////////////////////////////////////////////////////////////
 u16 CEntityAlive::PHGetSyncItemsNumber()
 {

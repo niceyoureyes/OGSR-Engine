@@ -26,7 +26,6 @@ public:
     typedef CEntityCondition::SConditionChangeV SConditionChangeV;
 
     IC static HitImmunity::HitTypeSVec& immunities(CActorCondition* C) { return C->m_HitTypeK; };
-    IC static CActorCondition::SConditionChangeV& sccv(CActorCondition* C) { return C->m_change_v; };
     IC static float& jump_speed(CActor* A) { return A->m_fJumpSpeed; }
 
     DECLARE_SCRIPT_REGISTER_FUNCTION

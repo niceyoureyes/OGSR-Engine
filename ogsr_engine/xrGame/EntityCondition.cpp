@@ -14,8 +14,13 @@
 #define MIN_HEALTH -0.01f
 
 #define MAX_POWER 1.0f
+#define MIN_POWER 0.0f
+
 #define MAX_RADIATION 1.0f
+#define MIN_RADIATION 0.0f
+
 #define MAX_PSY_HEALTH 1.0f
+#define MIN_PSY_HEALTH 0.0f
 
 CEntityConditionSimple::CEntityConditionSimple()
 {
@@ -28,64 +33,104 @@ CEntityConditionSimple::~CEntityConditionSimple() {}
 CEntityCondition::CEntityCondition(CEntityAlive* object) : CEntityConditionSimple()
 {
     VERIFY(object);
-
     m_object = object;
 
-    m_use_limping_state = false;
-    m_iLastTimeCalled = 0;
-    m_bTimeValid = false;
+    m_conds_active[eCondTypeHealth] = 1;
+    m_conds_active[eCondTypePower] = 1;
+    m_conds_active[eCondTypeRadiation] = 1;
+    m_conds_active[eCondTypePsyHealth] = 1;
+    m_conds_active[eCondTypeMorale] = 1;
 
-    m_fPowerMax = MAX_POWER;
-    m_fRadiationMax = MAX_RADIATION;
-    m_fPsyHealthMax = MAX_PSY_HEALTH;
-    m_fEntityMorale = m_fEntityMoraleMax = 1.f;
-
-    m_fPower = MAX_POWER;
-    m_fRadiation = 0;
-    m_fPsyHealth = MAX_PSY_HEALTH;
-
+    m_bCanBeHarmed = true;
     m_fMinWoundSize = 0.00001f;
-
-    m_fPowerHitPart = 0.5f;
-
-    m_fDeltaHealth = 0;
-    m_fDeltaPower = 0;
-    m_fDeltaRadiation = 0;
-    m_fDeltaPsyHealth = 0;
-
-    m_fHealthLost = 0.f;
-    m_pWho = NULL;
-    m_iWhoID = 0;
-
-    m_WoundVector.clear();
-
     m_fHitBoneScale = 1.f;
     m_fWoundBoneScale = 1.f;
+    m_fPowerHitPart = 0.5f;
 
-    m_bIsBleeding = false;
-    m_bCanBeHarmed = true;
+    reinit();
 }
 
-CEntityCondition::~CEntityCondition(void) { ClearWounds(); }
+CEntityCondition::~CEntityCondition(void)
+{ 
+    ClearWounds();
+}
 
-void CEntityCondition::ClearWounds()
+void CEntityCondition::reinit_deltas()
 {
-    for (WOUND_VECTOR_IT it = m_WoundVector.begin(); m_WoundVector.end() != it; ++it)
-        xr_delete(*it);
-    m_WoundVector.clear();
+    for (size_t i = 0; i < eCondTypeMax; i++)
+    {
+        m_conds[i].deltas = 0;
+    }
+}
 
-    m_bIsBleeding = false;
+void CEntityCondition::reinit_vals()
+{
+    m_conds[eCondTypeHealth].cur = MAX_HEALTH; health() = MAX_HEALTH;
+    m_conds[eCondTypeHealth].min = MIN_HEALTH;
+    m_conds[eCondTypeHealth].max = MAX_HEALTH; max_health() = MAX_HEALTH;
+
+    m_conds[eCondTypePower].cur = MAX_POWER;
+    m_conds[eCondTypePower].min = MIN_POWER;
+    m_conds[eCondTypePower].max = MAX_POWER;
+
+    m_conds[eCondTypeRadiation].cur = MIN_RADIATION;
+    m_conds[eCondTypeRadiation].min = MIN_RADIATION;
+    m_conds[eCondTypeRadiation].max = MAX_RADIATION;
+
+    m_conds[eCondTypePsyHealth].cur = MAX_PSY_HEALTH;
+    m_conds[eCondTypePsyHealth].min = MIN_PSY_HEALTH;
+    m_conds[eCondTypePsyHealth].max = MAX_PSY_HEALTH;
+
+    m_conds[eCondTypeAlcohol].cur = 0.0;
+    m_conds[eCondTypeAlcohol].min = 0.0;
+    m_conds[eCondTypeAlcohol].max = 0.0;
+
+    m_conds[eCondTypeSatiety].cur = 0.0;
+    m_conds[eCondTypeSatiety].min = 0.0;
+    m_conds[eCondTypeSatiety].max = 0.0;
+
+    m_conds[eCondTypeThirst].cur = 0.0;
+    m_conds[eCondTypeThirst].min = 0.0;
+    m_conds[eCondTypeThirst].max = 0.0;
+
+    m_conds[eCondTypeMorale].cur = 1.f;
+    m_conds[eCondTypeMorale].min = 0.0;
+    m_conds[eCondTypeMorale].max = 1.f;
+}
+
+void CEntityCondition::reinit_vals_UI()
+{
+    for (size_t i = 0; i < eCondTypeMax; i++)
+    {
+        m_conds_UI[i] = {0, 0};
+    }
+}
+
+void CEntityCondition::reinit()
+{
+    m_iLastTimeCalled = 0;
+    m_bTimeValid = false;
+    m_fHealthLost = 0.f;
+    m_fPowerLost = 0.f;
+    m_pWho = NULL;
+    m_iWhoID = NULL;
+
+    reinit_vals();
+    reinit_vals_UI();
+    reinit_deltas();
+    ClearWounds();
 }
 
 void CEntityCondition::LoadCondition(LPCSTR entity_section)
 {
     LPCSTR section = READ_IF_EXISTS(pSettings, r_string, entity_section, "condition_sect", entity_section);
 
-    m_change_v.load(section, "");
+    par_load(section, "");
 
     m_fMinWoundSize = pSettings->r_float(section, "min_wound_size");
     m_fPowerHitPart = pSettings->r_float(section, "power_hit_part");
     float fHealthHitPart = READ_IF_EXISTS(pSettings, r_float, section, "health_hit_part", 1.f);
+
     for (int hit_type = 0; hit_type < (int)ALife::eHitTypeMax; ++hit_type)
     {
         LPCSTR hit_name = ALife::g_cafHitType2String((ALife::EHitType)hit_type);
@@ -94,54 +139,7 @@ void CEntityCondition::LoadCondition(LPCSTR entity_section)
         s += "_hit_part";
         m_fHealthHitPart[hit_type] = READ_IF_EXISTS(pSettings, r_float, section, s.c_str(), fHealthHitPart);
     }
-
-    m_use_limping_state = !!(READ_IF_EXISTS(pSettings, r_bool, section, "use_limping_state", FALSE));
-    m_limping_threshold = READ_IF_EXISTS(pSettings, r_float, section, "limping_threshold", .5f);
 }
-
-void CEntityCondition::reinit()
-{
-    m_iLastTimeCalled = 0;
-    m_bTimeValid = false;
-
-    max_health() = MAX_HEALTH;
-    m_fPowerMax = MAX_POWER;
-    m_fRadiationMax = MAX_RADIATION;
-    m_fPsyHealthMax = MAX_PSY_HEALTH;
-
-    m_fEntityMorale = m_fEntityMoraleMax = 1.f;
-
-    health() = MAX_HEALTH;
-    m_fPower = MAX_POWER;
-    m_fRadiation = 0;
-    m_fPsyHealth = MAX_PSY_HEALTH;
-
-    m_fDeltaHealth = 0;
-    m_fDeltaPower = 0;
-    m_fDeltaRadiation = 0;
-    m_fDeltaEntityMorale = 0;
-    m_fDeltaPsyHealth = 0;
-
-    m_fHealthLost = 0.f;
-    m_pWho = NULL;
-    m_iWhoID = NULL;
-
-    ClearWounds();
-}
-
-void CEntityCondition::ChangeEntityMorale(float value) { m_fDeltaEntityMorale += value; }
-
-void CEntityCondition::ChangeHealth(float value)
-{
-    VERIFY(_valid(value));
-    m_fDeltaHealth += (CanBeHarmed() || (value > 0)) ? value : 0;
-}
-
-void CEntityCondition::ChangePower(float value) { m_fDeltaPower += value; }
-
-void CEntityCondition::ChangeRadiation(float value) { m_fDeltaRadiation += value; }
-
-void CEntityCondition::ChangePsyHealth(float value) { m_fDeltaPsyHealth += value; }
 
 void CEntityCondition::ChangeBleeding(float percent)
 {
@@ -152,6 +150,15 @@ void CEntityCondition::ChangeBleeding(float percent)
         if (0 == (*it)->TotalSize())
             (*it)->SetDestroy(true);
     }
+}
+
+void CEntityCondition::ClearWounds()
+{
+    for (WOUND_VECTOR_IT it = m_WoundVector.begin(); m_WoundVector.end() != it; ++it)
+        xr_delete(*it);
+    m_WoundVector.clear();
+
+    m_bIsBleeding = false;
 }
 
 bool RemoveWoundPred(CWound* pWound)
@@ -182,17 +189,16 @@ void CEntityCondition::UpdateConditionTime()
             SetConditionDeltaTime(x);
         }
         else
+        {
             SetConditionDeltaTime(0.0f);
+        }
     }
     else
     {
         SetConditionDeltaTime(0.0f);
         m_bTimeValid = true;
 
-        m_fDeltaHealth = 0;
-        m_fDeltaPower = 0;
-        m_fDeltaRadiation = 0;
-        m_fDeltaEntityMorale = 0;
+        reinit_deltas();
     }
 
     m_iLastTimeCalled = _cur_time;
@@ -203,54 +209,29 @@ void CEntityCondition::UpdateCondition()
 {
     if (GetHealth() <= 0)
         return;
-    //-----------------------------------------
-    bool CriticalHealth = false;
 
-    if (m_fDeltaHealth + GetHealth() <= 0)
-    {
-        CriticalHealth = true;
-    }
-    //-----------------------------------------
     UpdateHealth();
-    //-----------------------------------------
-    if (!CriticalHealth && m_fDeltaHealth + GetHealth() <= 0)
+
+    for (size_t i = 0; i < eCondTypeMax; i++)
     {
-        CriticalHealth = true;
-    };
-    //-----------------------------------------
-    UpdatePower();
-    UpdateRadiation();
-    //-----------------------------------------
-    if (!CriticalHealth && m_fDeltaHealth + GetHealth() <= 0)
-    {
-        CriticalHealth = true;
-    };
-    //-----------------------------------------
-    UpdatePsyHealth();
+        if (m_conds_active[i] == 0)
+            continue;
 
-    UpdateEntityMorale();
+        float& curr_val = ((i == eCondTypeHealth) ? health() : m_conds[i].cur);
+        float& min_val = m_conds[i].min;
+        float& max_val = m_conds[i].max;
+        float& delt_val = m_conds[i].deltas;
+        float& speed = m_conds[i].speed;
 
-    //if (m_object && m_object->ID() == 0)
-    //    clamp(m_fDeltaHealth, -0.8f, 1.0f);
+        delt_val += m_fDeltaTime * speed;
+        curr_val += delt_val;
+        clamp(curr_val, min_val, max_val);
 
-    health() += m_fDeltaHealth;
+        m_conds_UI[i].accum_val += delt_val;
+        m_conds_UI[i].passed_time += m_fDeltaTime;
 
-    m_fPower += m_fDeltaPower;
-    m_fPsyHealth += m_fDeltaPsyHealth;
-    m_fEntityMorale += m_fDeltaEntityMorale;
-    m_fRadiation += m_fDeltaRadiation;
-
-    m_fDeltaHealth = 0;
-    m_fDeltaPower = 0;
-    m_fDeltaRadiation = 0;
-    m_fDeltaPsyHealth = 0;
-    m_fDeltaEntityMorale = 0;
-
-    clamp(health(), MIN_HEALTH, max_health());
-    clamp(m_fPower, 0.0f, m_fPowerMax);
-    clamp(m_fRadiation, 0.0f, m_fRadiationMax);
-    clamp(m_fEntityMorale, 0.0f, m_fEntityMoraleMax);
-    clamp(m_fPsyHealth, 0.0f, m_fPsyHealthMax);
+        delt_val = 0.0;
+    }
 }
 
 float CEntityCondition::HitOutfitEffect(float hit_power, ALife::EHitType hit_type, s16 element, float AP)
@@ -293,13 +274,6 @@ float CEntityCondition::HitPowerEffect(float power_loss)
 
 CWound* CEntityCondition::AddWound(float hit_power, ALife::EHitType hit_type, u16 element)
 {
-    /*
-        if ( element == BI_NONE ) {
-          Msg( "! [%s]: %s: BI_NONE -> 0", __FUNCTION__, m_object->cName().c_str() );
-          element = 0;
-        }
-    */
-
     //максимальное число косточек 64
     VERIFY(element < 64 || BI_NONE == element);
 
@@ -338,74 +312,63 @@ CWound* CEntityCondition::ConditionHit(SHit* pHDS)
     m_iWhoID = (NULL != pHDS->who) ? pHDS->who->ID() : 0;
 
     float hit_power_org = pHDS->damage();
-    float hit_power = hit_power_org;
-    hit_power = HitOutfitEffect(hit_power, pHDS->hit_type, pHDS->boneID, pHDS->ap);
-
+    float hit_power = HitOutfitEffect(hit_power_org, pHDS->hit_type, pHDS->boneID, pHDS->ap);
     bool bAddWound = true;
+
     switch (pHDS->hit_type)
     {
-    case ALife::eHitTypeTelepatic:
-        // -------------------------------------------------
-        // temp (till there is no death from psy hits)
-        hit_power *= m_HitTypeK[pHDS->hit_type];
-        /*
-                m_fHealthLost = hit_power*m_fHealthHitPart*m_fHitBoneScale;
-                m_fDeltaHealth -= CanBeHarmed() ? m_fHealthLost : 0;
-                m_fDeltaPower -= hit_power*m_fPowerHitPart;
-        */
-        // -------------------------------------------------
+    case ALife::eHitTypeRadiation:
+        ChangeRadiation(hit_power);
+        return NULL;
+        break;
 
-        //		hit_power *= m_HitTypeK[pHDS->hit_type];
+    case ALife::eHitTypeTelepatic:
+        hit_power *= m_HitTypeK[pHDS->hit_type];
         ChangePsyHealth(-hit_power);
         bAddWound = false;
         break;
-        /*
-            case ALife::eHitTypeBurn:
-                hit_power *= m_HitTypeK[pHDS->hit_type];
-                m_fHealthLost = hit_power*m_fHealthHitPart*m_fHitBoneScale;
-                m_fDeltaHealth -= CanBeHarmed() ? m_fHealthLost : 0;
-                m_fDeltaPower -= hit_power*m_fPowerHitPart;
-                bAddWound		=  false;
-                break;
-        dsh: обработка перенесена ниже, вместе с eHitTypeFireWound, что бы работала
-        секция entity_fire_particles.
-        */
-    case ALife::eHitTypeChemicalBurn: hit_power *= m_HitTypeK[pHDS->hit_type]; break;
+
+    case ALife::eHitTypeChemicalBurn:
+        hit_power *= m_HitTypeK[pHDS->hit_type];
+        break;
+
     case ALife::eHitTypeShock:
         hit_power *= m_HitTypeK[pHDS->hit_type];
         m_fHealthLost = hit_power * m_fHealthHitPart[pHDS->hit_type];
-        m_fDeltaHealth -= CanBeHarmed() ? m_fHealthLost : 0;
-        m_fDeltaPower -= hit_power * m_fPowerHitPart;
+        m_fPowerLost = hit_power * m_fPowerHitPart;
+        ChangeHealth(-m_fHealthLost);
+        ChangePower(-m_fPowerLost);
         bAddWound = false;
         break;
-    case ALife::eHitTypeRadiation:
-        m_fDeltaRadiation += hit_power;
-        return NULL;
-        break;
+
     case ALife::eHitTypeExplosion:
     case ALife::eHitTypeStrike:
     case ALife::eHitTypePhysicStrike:
         hit_power *= m_HitTypeK[pHDS->hit_type];
         m_fHealthLost = hit_power * m_fHealthHitPart[pHDS->hit_type];
-        m_fDeltaHealth -= CanBeHarmed() ? m_fHealthLost : 0;
-        m_fDeltaPower -= hit_power * m_fPowerHitPart;
+        m_fPowerLost = hit_power * m_fPowerHitPart;
+        ChangeHealth(-m_fHealthLost);
+        ChangePower(-m_fPowerLost);
         break;
+
     case ALife::eHitTypeBurn:
     case ALife::eHitTypeFireWound:
     case ALife::eHitTypeWound:
         hit_power *= m_HitTypeK[pHDS->hit_type];
         m_fHealthLost = hit_power * m_fHealthHitPart[pHDS->hit_type] * m_fHitBoneScale;
-        m_fDeltaHealth -= CanBeHarmed() ? m_fHealthLost : 0;
-        m_fDeltaPower -= hit_power * m_fPowerHitPart;
+        m_fPowerLost = hit_power * m_fPowerHitPart;
+        ChangeHealth(-m_fHealthLost);
+        ChangePower(-m_fPowerLost);
         break;
-    default: {
-        R_ASSERT2(0, "unknown hit type");
-    }
-    break;
+
+    default:
+        { R_ASSERT2(0, "unknown hit type"); }
+        break;
     }
 
     if (bDebug)
         Msg("%s hitted in %s with %f[%f]", m_object->Name(), smart_cast<IKinematics*>(m_object->Visual())->LL_BoneName(pHDS->boneID), m_fHealthLost * 100.0f, hit_power_org);
+
     //раны добавляются только живому
     if (bAddWound && GetHealth() > 0)
         return AddWound(hit_power * m_fWoundBoneScale, pHDS->hit_type, pHDS->boneID);
@@ -425,41 +388,11 @@ float CEntityCondition::BleedingSpeed()
 
 void CEntityCondition::UpdateHealth()
 {
-    float bleeding_speed = BleedingSpeed() * m_fDeltaTime * m_change_v.m_fV_Bleeding;
+    float bleeding_speed = BleedingSpeed() * m_fDeltaTime * m_fV_Bleeding;
     m_bIsBleeding = fis_zero(bleeding_speed) ? false : true;
-    m_fDeltaHealth -= CanBeHarmed() ? bleeding_speed : 0;
-    m_fDeltaHealth += m_fDeltaTime * m_change_v.m_fV_HealthRestore;
 
-    VERIFY(_valid(m_fDeltaHealth));
-    ChangeBleeding(m_change_v.m_fV_WoundIncarnation * m_fDeltaTime);
-}
-
-void CEntityCondition::UpdatePower() {}
-
-void CEntityCondition::UpdatePsyHealth(float k)
-{
-    if (m_fPsyHealth > 0)
-    {
-        m_fDeltaPsyHealth += m_change_v.m_fV_PsyHealth * k * m_fDeltaTime;
-    }
-}
-
-void CEntityCondition::UpdateRadiation(float k)
-{
-    if (m_fRadiation > 0)
-    {
-        m_fDeltaRadiation -= m_change_v.m_fV_Radiation * k * m_fDeltaTime;
-
-        m_fDeltaHealth -= CanBeHarmed() ? m_change_v.m_fV_RadiationHealth * m_fRadiation * m_fDeltaTime : 0.0f;
-    }
-}
-
-void CEntityCondition::UpdateEntityMorale()
-{
-    if (m_fEntityMorale < m_fEntityMoraleMax)
-    {
-        m_fDeltaEntityMorale += m_change_v.m_fV_EntityMorale * m_fDeltaTime;
-    }
+    ChangeHealth(-bleeding_speed);
+    ChangeBleeding(m_fV_WoundIncarnation * m_fDeltaTime);
 }
 
 void CEntityCondition::save(NET_Packet& output_packet)
@@ -469,10 +402,10 @@ void CEntityCondition::save(NET_Packet& output_packet)
     output_packet.w_u8(is_alive);
     if (is_alive)
     {
-        save_data(m_fPower, output_packet);
-        save_data(m_fRadiation, output_packet);
-        save_data(m_fEntityMorale, output_packet);
-        save_data(m_fPsyHealth, output_packet);
+        save_data(m_conds[eCondTypePower].cur, output_packet);
+        save_data(m_conds[eCondTypeRadiation].cur, output_packet);
+        save_data(m_conds[eCondTypeMorale].cur, output_packet);
+        save_data(m_conds[eCondTypePsyHealth].cur, output_packet);
 
         output_packet.w_u8((u8)m_WoundVector.size());
         for (WOUND_VECTOR_IT it = m_WoundVector.begin(); m_WoundVector.end() != it; it++)
@@ -487,72 +420,59 @@ void CEntityCondition::load(IReader& input_packet)
     u8 is_alive = input_packet.r_u8();
     if (is_alive)
     {
-        load_data(m_fPower, input_packet);
-        load_data(m_fRadiation, input_packet);
-        load_data(m_fEntityMorale, input_packet);
-        load_data(m_fPsyHealth, input_packet);
+        load_data(m_conds[eCondTypePower].cur, input_packet);
+        load_data(m_conds[eCondTypeRadiation].cur, input_packet);
+        load_data(m_conds[eCondTypeMorale].cur, input_packet);
+        load_data(m_conds[eCondTypePsyHealth].cur, input_packet);
 
         ClearWounds();
+
         m_WoundVector.resize(input_packet.r_u8());
+
         if (!m_WoundVector.empty())
+        {
             for (u32 i = 0; i < m_WoundVector.size(); i++)
             {
                 CWound* pWound = xr_new<CWound>(BI_NONE);
                 pWound->load(input_packet);
                 m_WoundVector[i] = pWound;
             }
+        }
     }
 }
 
+const static size_t CCV_NAMES_COUNT = 7;
 constexpr LPCSTR CCV_NAMES[] = {"radiation_v", "radiation_health_v", "morale_v", "psy_health_v", "bleeding_v", "wound_incarnation_v", "health_restore_v"};
 
-float& CEntityCondition::SConditionChangeV::value(LPCSTR name)
+float& CEntityCondition::par_value(LPCSTR name)
 {
     // CEntityCondition::SConditionChangeV::
-    float* values[] = {&m_fV_Radiation, &m_fV_RadiationHealth, &m_fV_EntityMorale, &m_fV_PsyHealth, &m_fV_Bleeding, &m_fV_WoundIncarnation, &m_fV_HealthRestore};
-    for (int i = 0; i < PARAMS_COUNT; i++)
+    float* values[] = { &m_conds[eCondTypeRadiation].speed
+                      , &m_fV_RadiationHealth
+                      , &m_conds[eCondTypeMorale].speed
+                      , &m_conds[eCondTypePsyHealth].speed
+                      , &m_fV_Bleeding
+                      , &m_fV_WoundIncarnation
+                      , &m_conds[eCondTypeHealth].speed };
+
+    for (int i = 0; i < CCV_NAMES_COUNT; i++)
         if (strstr(name, CCV_NAMES[i]))
             return *values[i];
 
     static float fake = 0;
     return fake;
 }
-void CEntityCondition::SConditionChangeV::load(LPCSTR sect, LPCSTR prefix)
+
+void CEntityCondition::par_load(LPCSTR sect, LPCSTR prefix)
 {
     string256 str;
-    for (int i = 0; i < PARAMS_COUNT; i++)
+
+    for (int i = 0; i < CCV_NAMES_COUNT; i++)
     {
         strconcat(sizeof(str), str, CCV_NAMES[i], prefix);
         float v = READ_IF_EXISTS(pSettings, r_float, sect, str, 0.0f);
-        value(CCV_NAMES[i]) = v;
+        par_value(CCV_NAMES[i]) = v;
     }
-    /*
-    strconcat				(sizeof(str),str,"radiation_v",prefix);
-    m_fV_Radiation			= pSettings->r_float(sect,str);
-    strconcat				(sizeof(str),str,"radiation_health_v",prefix);
-    m_fV_RadiationHealth	= pSettings->r_float(sect,str);
-    strconcat				(sizeof(str),str,"morale_v",prefix);
-    m_fV_EntityMorale		= pSettings->r_float(sect,str);
-    strconcat				(sizeof(str),str,"psy_health_v",prefix);
-    m_fV_PsyHealth			= pSettings->r_float(sect,str);
-    strconcat				(sizeof(str),str,"bleeding_v",prefix);
-    m_fV_Bleeding			= pSettings->r_float(sect,str);
-    strconcat				(sizeof(str),str,"wound_incarnation_v",prefix);
-    m_fV_WoundIncarnation	= pSettings->r_float(sect,str);
-    strconcat				(sizeof(str),str,"health_restore_v",prefix);
-    m_fV_HealthRestore		= READ_IF_EXISTS(pSettings,r_float,sect, str,0.0f);
-    */
-}
-
-float CEntityCondition::GetParamByName(LPCSTR name)
-{
-    const static LPCSTR PARAM_NAMES[] = {"health", "power", "radiation", "psy_health", "morale", "max_health", "power_max", "radiation_max", "psy_health_max", "morale_max"};
-    float* values[] = {&health(), &m_fPower, &m_fRadiation, &m_fPsyHealth, &m_fEntityMorale, &max_health(), &m_fPowerMax, &m_fRadiationMax, &m_fPsyHealthMax, &m_fEntityMoraleMax};
-    for (int i = 0; i < 10; i++)
-        if (strstr(name, PARAM_NAMES[i]))
-            return *values[i];
-
-    return m_change_v.value(name);
 }
 
 void CEntityCondition::remove_links(const CObject* object)
@@ -564,17 +484,41 @@ void CEntityCondition::remove_links(const CObject* object)
     m_iWhoID = m_object->ID();
 }
 
-using namespace luabind;
+/************* Script *************/
 
-void set_entity_health(CEntityCondition* E, float h) { E->health() = h; }
-void set_entity_max_health(CEntityCondition* E, float h) { E->health() = h; }
+using namespace luabind;
 
 bool get_entity_crouch(CEntity::SEntityState* S) { return S->bCrouch; }
 bool get_entity_fall(CEntity::SEntityState* S) { return S->bFall; }
 bool get_entity_jump(CEntity::SEntityState* S) { return S->bJump; }
 bool get_entity_sprint(CEntity::SEntityState* S) { return S->bSprint; }
 
-// extern LPCSTR get_lua_class_name(luabind::object O);
+static void set_entity_health(CEntityCondition* E, float h) { E->health() = h; }
+static void set_entity_max_health(CEntityCondition* E, float h) { E->health() = h; }
+
+template <ECondType n>
+static float get_val(CEntityCondition* C)
+{
+    return C->mcondv()[n].cur;
+}
+
+template <ECondType n>
+static void set_val(CEntityCondition* C, float v)
+{
+    return C->mcondv()[n].cur = v;
+}
+
+template <ECondType n>
+static float get_max_val(CEntityCondition* C)
+{
+    return C->mcondv()[n].max;
+}
+
+template <ECondType n>
+static void set_max_val(CEntityCondition* C, float v)
+{
+    return C->mcondv()[n].max = v;
+}
 
 void CEntityCondition::script_register(lua_State* L)
 {
@@ -584,26 +528,22 @@ void CEntityCondition::script_register(lua_State* L)
                   .property("jump", &get_entity_jump)
                   .property("sprint", &get_entity_sprint)
                   .def_readonly("velocity", &CEntity::SEntityState::fVelocity)
-                  .def_readonly("a_velocity", &CEntity::SEntityState::fAVelocity)
-              //.property     ("class_name"			,				&get_lua_class_name)
-              ,
+                  .def_readonly("a_velocity", &CEntity::SEntityState::fAVelocity),
+
               class_<CEntityCondition>("CEntityCondition")
                   .def("fdelta_time", &CEntityCondition::fdelta_time)
                   .def_readonly("has_valid_time", &CEntityCondition::m_bTimeValid)
-                  .def_readwrite("power", &CEntityCondition::m_fPower)
-                  .def_readwrite("power_max", &CEntityCondition::m_fPowerMax)
-                  .def_readwrite("psy_health", &CEntityCondition::m_fPsyHealth)
-                  .def_readwrite("psy_health_max", &CEntityCondition::m_fPsyHealthMax)
-                  .def_readwrite("radiation", &CEntityCondition::m_fRadiation)
-                  .def_readwrite("radiation_max", &CEntityCondition::m_fRadiationMax)
-                  .def_readwrite("morale", &CEntityCondition::m_fEntityMorale)
-                  .def_readwrite("morale_max", &CEntityCondition::m_fEntityMoraleMax)
-                  .def_readwrite("min_wound_size", &CEntityCondition::m_fMinWoundSize)
-                  .def_readonly("is_bleeding", &CEntityCondition::m_bIsBleeding)
-                  //.def_readwrite("health_hit_part",			&CEntityCondition::m_fHealthHitPart)
-                  .def_readwrite("power_hit_part", &CEntityCondition::m_fPowerHitPart)				
                   .property("health", &CEntityCondition::GetHealth, &set_entity_health)
                   .property("max_health", &CEntityCondition::GetMaxHealth, &set_entity_max_health)
-              //.property("class_name"				,				&get_lua_class_name)
-    ];
+                  .property("power", &get_val<eCondTypePower>, &set_val<eCondTypePower>)
+                  .property("power_max", &get_max_val<eCondTypePower>, &set_max_val<eCondTypePower>)
+                  .property("psy_health", &get_val<eCondTypePsyHealth>, &set_val<eCondTypePsyHealth>)
+                  .property("psy_health_max", &get_max_val<eCondTypePsyHealth>, &set_max_val<eCondTypePsyHealth>)
+                  .property("radiation", &get_val<eCondTypeRadiation>, &set_val<eCondTypeRadiation>)
+                  .property("radiation_max", &get_max_val<eCondTypeRadiation>, &set_max_val<eCondTypeRadiation>)
+                  .property("morale", &get_val<eCondTypeMorale>, &set_val<eCondTypeMorale>)
+                  .property("morale_max", &get_max_val<eCondTypeMorale>, &set_max_val<eCondTypeMorale>)
+                  .def_readonly("is_bleeding", &CEntityCondition::m_bIsBleeding)
+                  .def_readwrite("min_wound_size", &CEntityCondition::m_fMinWoundSize)
+                  .def_readwrite("power_hit_part", &CEntityCondition::m_fPowerHitPart)];
 }

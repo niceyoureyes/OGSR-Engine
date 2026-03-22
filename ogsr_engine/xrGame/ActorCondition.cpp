@@ -360,8 +360,8 @@ void CActorCondition::UpdateSatiety()
         satiety_health_koef = 0;
     }
 
-    m_fDeltaHealth += m_fV_SatietyHealth * satiety_health_koef * m_fDeltaTime;
-    m_fDeltaPower += m_fV_SatietyPower * satiety_power_koef * m_fDeltaTime;
+    ChangeHealth(m_fV_SatietyHealth * satiety_health_koef * m_fDeltaTime);
+    ChangePower(m_fV_SatietyPower * satiety_power_koef * m_fDeltaTime);
 }
 
 void CActorCondition::UpdateThirst()
@@ -398,14 +398,14 @@ void CActorCondition::UpdateThirst()
         thirst_health_koef = 0;
     }
 
-    m_fDeltaHealth += m_fV_ThirstHealth * thirst_health_koef * m_fDeltaTime;
-    m_fDeltaPower += m_fV_ThirstPower * thirst_power_koef * m_fDeltaTime;
+    ChangeHealth(m_fV_ThirstHealth * thirst_health_koef * m_fDeltaTime);
+    ChangePower(m_fV_ThirstPower * thirst_power_koef * m_fDeltaTime);
 }
 
 void CActorCondition::UpdatePower()
 {
-    m_fPower += m_fV_Power * m_fDeltaTime;
-    clamp(m_fPower, 0.0f, 1.0f);
+    power() += m_fV_Power * m_fDeltaTime;
+    clamp(power(), 0.0f, 1.0f);
 }
 
 CWound* CActorCondition::ConditionHit(SHit* pHDS)
@@ -415,39 +415,39 @@ CWound* CActorCondition::ConditionHit(SHit* pHDS)
     return inherited::ConditionHit(pHDS);
 }
 
-void CActorCondition::PowerHit(float power, bool apply_outfit)
+void CActorCondition::PowerHit(float power_, bool apply_outfit)
 {
-    m_fPower -= apply_outfit ? HitPowerEffect(power) : power;
-    clamp(m_fPower, 0.f, 1.f);
+    power() -= apply_outfit ? HitPowerEffect(power_) : power_;
+    clamp(power(), 0.f, 1.f);
 }
 
 // weight - "удельный" вес от 0..1
 void CActorCondition::ConditionJump(float weight)
 {
-    float power = m_fJumpPower;
-    power += m_fJumpWeightPower * weight * (weight > 1.f ? m_fOverweightJumpK : 1.f);
-    m_fPower -= HitPowerEffect(power);
+    float power_ = m_fJumpPower;
+    power_ += m_fJumpWeightPower * weight * (weight > 1.f ? m_fOverweightJumpK : 1.f);
+    power() -= HitPowerEffect(power_);
 }
 void CActorCondition::ConditionWalk(float weight, bool accel, bool sprint)
 {
-    float power = m_fWalkPower;
-    power += m_fWalkWeightPower * weight * (weight > 1.f ? m_fOverweightWalkK : 1.f);
-    power *= m_fDeltaTime * (accel ? (sprint ? m_fSprintK : m_fAccelK) : 1.f);
-    m_fPower -= HitPowerEffect(power);
+    float power_ = m_fWalkPower;
+    power_ += m_fWalkWeightPower * weight * (weight > 1.f ? m_fOverweightWalkK : 1.f);
+    power_ *= m_fDeltaTime * (accel ? (sprint ? m_fSprintK : m_fAccelK) : 1.f);
+    power() -= HitPowerEffect(power_);
 }
 
 void CActorCondition::ConditionStand(float weight)
 {
-    float power = m_fStandPower;
-    power *= m_fDeltaTime;
-    m_fPower -= power;
+    float power_ = m_fStandPower;
+    power_ *= m_fDeltaTime;
+    power() -= power_;
 }
 
 bool CActorCondition::IsCantWalk()
 {
-    if (m_fPower < m_fCantWalkPowerBegin)
+    if (power() < m_fCantWalkPowerBegin)
         m_condition_flags.set(eCantWalk, TRUE);
-    else if (m_fPower > m_fCantWalkPowerEnd)
+    else if (power() > m_fCantWalkPowerEnd)
         m_condition_flags.set(eCantWalk, FALSE);
     return m_condition_flags.test(eCantWalk);
 }
@@ -472,9 +472,9 @@ bool CActorCondition::IsCantWalkWeight()
 
 bool CActorCondition::IsCantSprint()
 {
-    if (m_fPower < m_fCantSprintPowerBegin)
+    if (power() < m_fCantSprintPowerBegin)
         m_condition_flags.set(eCantSprint, TRUE);
-    else if (m_fPower > m_fCantSprintPowerEnd)
+    else if (power() > m_fCantSprintPowerEnd)
         m_condition_flags.set(eCantSprint, FALSE);
     return m_condition_flags.test(eCantSprint);
 }
@@ -486,16 +486,16 @@ bool CActorCondition::IsCantJump(float weight)
         return false;
     }
 
-    float power = m_fJumpPower;
-    power += m_fJumpWeightPower * weight * (weight > 1.f ? m_fOverweightJumpK : 1.f);
-    return m_fPower < HitPowerEffect(power);
+    float power_ = m_fJumpPower;
+    power_ += m_fJumpWeightPower * weight * (weight > 1.f ? m_fOverweightJumpK : 1.f);
+    return power() < HitPowerEffect(power_);
 }
 
 bool CActorCondition::IsLimping()
 {
-    if (m_fPower < m_fLimpingPowerBegin || GetHealth() < m_fLimpingHealthBegin)
+    if (power() < m_fLimpingPowerBegin || GetHealth() < m_fLimpingHealthBegin)
         m_condition_flags.set(eLimping, TRUE);
-    else if (m_fPower > m_fLimpingPowerEnd && GetHealth() > m_fLimpingHealthEnd)
+    else if (power() > m_fLimpingPowerEnd && GetHealth() > m_fLimpingHealthEnd)
         m_condition_flags.set(eLimping, FALSE);
     return m_condition_flags.test(eLimping);
 }

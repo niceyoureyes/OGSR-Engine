@@ -71,8 +71,6 @@ public:
     virtual float g_Radiation() const;
     virtual float SetfRadiation(float value);
 
-    virtual float CalcCondition(float hit);
-
     // Visibility related
     virtual float ffGetFov() const = 0;
     virtual float ffGetRange() const = 0;

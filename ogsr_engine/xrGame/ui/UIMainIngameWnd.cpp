@@ -431,6 +431,31 @@ void CUIMainIngameWnd::Update()
     // health&armor
     UIHealthBar.SetProgressPos(m_pActor->GetfHealth() * 100.0f);
     UIMotionIcon.SetPower(m_pActor->conditions().GetPower() * 100.0f);
+    m_pActor->GetMaxHealth();
+    m_pActor->conditions();
+
+    string128 _buff;
+    long long cval = (long long)(m_pActor->conditions().GetHealth() * 1000);
+    long long cvalmax = (long long)(m_pActor->conditions().GetMaxHealth() * 1000);
+    float cvaldiff = (float)(m_pActor->conditions().GetHealthDeltaUI());
+    //static long long cvaldiffmin = 1000000;
+    //static long long cvaldiffmax = -1000000;
+    static float cvaldiffmed = 0;
+    static std::queue<float> dcval;
+    dcval.push(cvaldiff);
+    cvaldiffmed += cvaldiff;
+    if (dcval.size() > 25)
+    {
+        cvaldiffmed -= dcval.front();
+        dcval.pop();
+    }
+
+    //cvaldiffmin = std::min(cvaldiffmin, cvaldiff);
+    //cvaldiffmax = std::max(cvaldiffmax, cvaldiff);
+    sprintf_s(_buff, sizeof(_buff), "%04lld/%04lld %s%.10f", cval, cvalmax, (cvaldiffmed >= 0 ? "+" : ""), (cvaldiffmed / 25));
+
+    UIHealthBar.m_UIProgressItem.SetVTextAlignment(valCenter);
+    UIHealthBar.m_UIProgressItem.SetText(_buff);
 
     UIZoneMap->UpdateRadar(Device.vCameraPosition);
     float h, p;

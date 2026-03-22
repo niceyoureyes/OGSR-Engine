@@ -25,16 +25,16 @@ CPHMovementControl* get_movement(CActor* pActor) { return pActor->character_phys
 typedef CScriptActor::SConditionChangeV SConditionChangeV;
 typedef float SConditionChangeV::*SConditionChangeVField;
 
-template <SConditionChangeVField field>
+template <ECondType n>
 float get_change_v(CActorCondition* C)
 {
-    return CScriptActor::sccv(C).*field;
+    return C->mcondv()[n].speed;
 }
 
-template <SConditionChangeVField field>
+template <ECondType n>
 void set_change_v(CActorCondition* C, float v)
 {
-    CScriptActor::sccv(C).*field = v;
+    C->mcondv()[n].speed = v;
 }
 
 void set_health(CActorCondition* C, float h) { C->health() = h; }
@@ -135,16 +135,18 @@ void CScriptActor::script_register(lua_State* L)
                .property("limping", &IsLimping)
                .property("cant_walk", &IsCantWalk)
                .property("cant_sprint", &IsCantSprint)
-               .property("radiation_v", &get_change_v<&SConditionChangeV::m_fV_Radiation>, &set_change_v<&SConditionChangeV::m_fV_Radiation>)
-               .property("psy_health_v", &get_change_v<&SConditionChangeV::m_fV_PsyHealth>, &set_change_v<&SConditionChangeV::m_fV_PsyHealth>)
-               .property("morale_v", &get_change_v<&SConditionChangeV::m_fV_EntityMorale>, &set_change_v<&SConditionChangeV::m_fV_EntityMorale>)
-               .property("radiation_health_v", &get_change_v<&SConditionChangeV::m_fV_RadiationHealth>, &set_change_v<&SConditionChangeV::m_fV_RadiationHealth>)
-               .property("bleeding_v", &get_change_v<&SConditionChangeV::m_fV_Bleeding>, &set_change_v<&SConditionChangeV::m_fV_Bleeding>)
-               .property("wound_incarnation_v", &get_change_v<&SConditionChangeV::m_fV_WoundIncarnation>, &set_change_v<&SConditionChangeV::m_fV_WoundIncarnation>)
-               .property("health_restore_v", &get_change_v<&SConditionChangeV::m_fV_HealthRestore>, &set_change_v<&SConditionChangeV::m_fV_HealthRestore>)
+
+
+               .property("health_restore_v", &get_change_v<eCondTypeHealth>, &set_change_v<eCondTypeHealth>)
+               .property("radiation_v", &get_change_v<eCondTypeRadiation>, &set_change_v<eCondTypeRadiation>)
+               .property("psy_health_v", &get_change_v<eCondTypePsyHealth>, &set_change_v<eCondTypePsyHealth>)
+               .property("morale_v", &get_change_v<eCondTypeMorale>, &set_change_v<eCondTypeMorale>)
+               .def_readwrite("radiation_health_v", &CEntityCondition::m_fV_RadiationHealth)
+               .def_readwrite("bleeding_v", &CEntityCondition::m_fV_Bleeding)
+               .def_readwrite("wound_incarnation_v", &CEntityCondition::m_fV_WoundIncarnation)
                .def("get_wound_size", &get_wound_size)
                .def("get_wound_total_size", &get_wound_total_size)
-           //.property("class_name",						&get_lua_class_name)
+               //.property("class_name",						&get_lua_class_name)
            ,
            class_<CActorConditionObject, bases<CActorCondition, CEntityCondition>>("CActorCondition") // нормальное наследование свойств происходит через Ж (
            ,

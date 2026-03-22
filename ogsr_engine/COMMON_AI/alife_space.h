@@ -103,6 +103,19 @@ enum EHitType
     eHitTypeMax,
 };
 
+enum ECondType
+{
+    eCondTypeHealth = u32(0),
+    eCondTypePower,
+    eCondTypeRadiation,
+    eCondTypePsyHealth,
+    eCondTypeAlcohol,
+    eCondTypeSatiety,
+    eCondTypeThirst,
+    eCondTypeMorale,
+    eCondTypeMax,
+};
+
 enum ETakeType
 {
     eTakeTypeAll,
