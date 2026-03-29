@@ -126,6 +126,7 @@ void CEntityCondition::LoadCondition(LPCSTR entity_section)
     LPCSTR section = READ_IF_EXISTS(pSettings, r_string, entity_section, "condition_sect", entity_section);
 
     par_load(section, "");
+    m_conds[eCondTypeRadiation].speed *= (-1);
 
     m_fMinWoundSize = pSettings->r_float(section, "min_wound_size");
     m_fPowerHitPart = pSettings->r_float(section, "power_hit_part");
@@ -211,26 +212,23 @@ void CEntityCondition::UpdateCondition()
         return;
 
     UpdateHealth();
+    UpdateWounds();
 
     for (size_t i = 0; i < eCondTypeMax; i++)
     {
-        if (m_conds_active[i] == 0)
+        if (m_conds_active[i] == false)
             continue;
 
-        float& curr_val = ((i == eCondTypeHealth) ? health() : m_conds[i].cur);
-        float& min_val = m_conds[i].min;
-        float& max_val = m_conds[i].max;
-        float& delt_val = m_conds[i].deltas;
-        float& speed = m_conds[i].speed;
+        ECondType etype = static_cast<ECondType>(i);
 
-        delt_val += m_fDeltaTime * speed;
-        curr_val += delt_val;
-        clamp(curr_val, min_val, max_val);
+        // Custom speed + Base speed
+        ChangeSpeedTotalValue(etype, GetSpeedValue(etype));
 
-        m_conds_UI[i].accum_val += delt_val;
-        m_conds_UI[i].passed_time += m_fDeltaTime;
+        // Immediate delta + Time delta
+        ChangeValue(etype, m_fDeltaTime * GetSpeedTotalValue(etype));
 
-        delt_val = 0.0;
+        // Final update and clear
+        ChangeCurrValue(etype);
     }
 }
 
@@ -388,11 +386,23 @@ float CEntityCondition::BleedingSpeed()
 
 void CEntityCondition::UpdateHealth()
 {
-    float bleeding_speed = BleedingSpeed() * m_fDeltaTime * m_fV_Bleeding;
-    m_bIsBleeding = fis_zero(bleeding_speed) ? false : true;
+    float rad_roat_speed = m_scaler.Scale(eCondTypeRadiation, eCondTypeHealth, GetRadiation()) * GetRel_RadiationHealth();
+    float bleeding_speed = m_scaler.Scale(eCondTypeBleeding, eCondTypeHealth, BleedingSpeed());
+    float starve_speed = m_scaler.Scale(eCondTypeSatiety, eCondTypeHealth, GetSatiety());
+    float dry_speed = m_scaler.Scale(eCondTypeThirst, eCondTypeHealth, GetThirst());
 
-    ChangeHealth(-bleeding_speed);
-    ChangeBleeding(m_fV_WoundIncarnation * m_fDeltaTime);
+    ChangeSpeedTotalValue(eCondTypeHealth, -1.f * (rad_roat_speed + bleeding_speed + starve_speed + dry_speed));
+    m_bIsBleeding = fis_zero(bleeding_speed) ? false : true;
+}
+
+void CEntityCondition::UpdatePower()
+{
+    float rad_roat_speed = m_scaler.Scale(eCondTypeRadiation, eCondTypePower, GetRadiation());
+    float bleeding_speed = m_scaler.Scale(eCondTypeBleeding, eCondTypePower, BleedingSpeed());
+    float starve_speed = m_scaler.Scale(eCondTypeSatiety, eCondTypePower, GetSatiety());
+    float dry_speed = m_scaler.Scale(eCondTypeThirst, eCondTypePower, GetThirst());
+    
+    ChangeSpeedTotalValue(eCondTypePower, GetSpeedPower() / (rad_roat_speed + bleeding_speed + starve_speed + dry_speed));
 }
 
 void CEntityCondition::save(NET_Packet& output_packet)
@@ -446,13 +456,12 @@ constexpr LPCSTR CCV_NAMES[] = {"radiation_v", "radiation_health_v", "morale_v",
 
 float& CEntityCondition::par_value(LPCSTR name)
 {
-    // CEntityCondition::SConditionChangeV::
     float* values[] = { &m_conds[eCondTypeRadiation].speed
-                      , &m_fV_RadiationHealth
+                      , &m_conds_rel[std::make_pair(eCondTypeRadiation, eCondTypeHealth)]
                       , &m_conds[eCondTypeMorale].speed
                       , &m_conds[eCondTypePsyHealth].speed
-                      , &m_fV_Bleeding
-                      , &m_fV_WoundIncarnation
+                      , &m_conds_rel[std::make_pair(eCondTypeBleeding, eCondTypeHealth)]
+                      , &m_conds[eCondTypeBleeding].speed
                       , &m_conds[eCondTypeHealth].speed };
 
     for (int i = 0; i < CCV_NAMES_COUNT; i++)
@@ -493,33 +502,6 @@ bool get_entity_fall(CEntity::SEntityState* S) { return S->bFall; }
 bool get_entity_jump(CEntity::SEntityState* S) { return S->bJump; }
 bool get_entity_sprint(CEntity::SEntityState* S) { return S->bSprint; }
 
-static void set_entity_health(CEntityCondition* E, float h) { E->health() = h; }
-static void set_entity_max_health(CEntityCondition* E, float h) { E->health() = h; }
-
-template <ECondType n>
-static float get_val(CEntityCondition* C)
-{
-    return C->mcondv()[n].cur;
-}
-
-template <ECondType n>
-static void set_val(CEntityCondition* C, float v)
-{
-    return C->mcondv()[n].cur = v;
-}
-
-template <ECondType n>
-static float get_max_val(CEntityCondition* C)
-{
-    return C->mcondv()[n].max;
-}
-
-template <ECondType n>
-static void set_max_val(CEntityCondition* C, float v)
-{
-    return C->mcondv()[n].max = v;
-}
-
 void CEntityCondition::script_register(lua_State* L)
 {
     module(L)[class_<CEntity::SEntityState>("SEntityState")
@@ -533,16 +515,16 @@ void CEntityCondition::script_register(lua_State* L)
               class_<CEntityCondition>("CEntityCondition")
                   .def("fdelta_time", &CEntityCondition::fdelta_time)
                   .def_readonly("has_valid_time", &CEntityCondition::m_bTimeValid)
-                  .property("health", &CEntityCondition::GetHealth, &set_entity_health)
-                  .property("max_health", &CEntityCondition::GetMaxHealth, &set_entity_max_health)
-                  .property("power", &get_val<eCondTypePower>, &set_val<eCondTypePower>)
-                  .property("power_max", &get_max_val<eCondTypePower>, &set_max_val<eCondTypePower>)
-                  .property("psy_health", &get_val<eCondTypePsyHealth>, &set_val<eCondTypePsyHealth>)
-                  .property("psy_health_max", &get_max_val<eCondTypePsyHealth>, &set_max_val<eCondTypePsyHealth>)
-                  .property("radiation", &get_val<eCondTypeRadiation>, &set_val<eCondTypeRadiation>)
-                  .property("radiation_max", &get_max_val<eCondTypeRadiation>, &set_max_val<eCondTypeRadiation>)
-                  .property("morale", &get_val<eCondTypeMorale>, &set_val<eCondTypeMorale>)
-                  .property("morale_max", &get_max_val<eCondTypeMorale>, &set_max_val<eCondTypeMorale>)
+                  .property("health", &CEntityCondition::GetHealth, &CEntityCondition::SetHealth)
+                  .property("max_health", &CEntityCondition::GetMaxHealth, &CEntityCondition::SetMaxHealth)
+                  .property("power", &CEntityCondition::GetPower, &CEntityCondition::SetPower)
+                  .property("power_max", &CEntityCondition::GetMaxPower, &CEntityCondition::SetMaxPower)
+                  .property("psy_health", &CEntityCondition::GetPsyHealth, &CEntityCondition::SetPsyHealth)
+                  .property("psy_health_max", &CEntityCondition::GetMaxPsyHealth, &CEntityCondition::SetMaxPsyHealth)
+                  .property("radiation", &CEntityCondition::GetRadiation, &CEntityCondition::SetRadiation)
+                  .property("radiation_max", &CEntityCondition::GetMaxRadiation, &CEntityCondition::SetMaxRadiation)
+                  .property("morale", &CEntityCondition::GetEntityMorale, &CEntityCondition::SetEntityMorale)
+                  .property("morale_max", &CEntityCondition::GetMaxEntityMorale, &CEntityCondition::SetMaxEntityMorale)
                   .def_readonly("is_bleeding", &CEntityCondition::m_bIsBleeding)
                   .def_readwrite("min_wound_size", &CEntityCondition::m_fMinWoundSize)
                   .def_readwrite("power_hit_part", &CEntityCondition::m_fPowerHitPart)];

@@ -71,10 +71,7 @@ public:
     void ConditionWalk(float weight, bool accel, bool sprint);
     void ConditionStand(float weight);
 
-    float GetAlcohol() { return m_fAlcohol; }
     float GetPsy() { return 1.0f - GetPsyHealth(); }
-    float GetSatiety() { return m_fSatiety; }
-    float GetThirst() { return m_fThirst; }
     void SetMaxWalkWeight(float _weight) { m_MaxWalkWeight = _weight; }
 
     void AffectDamage_InjuriousMaterialAndMonstersInfluence();

@@ -107,6 +107,7 @@ enum ECondType
 {
     eCondTypeHealth = u32(0),
     eCondTypePower,
+    eCondTypeBleeding,
     eCondTypeRadiation,
     eCondTypePsyHealth,
     eCondTypeAlcohol,

@@ -20,26 +20,6 @@ using namespace luabind;
 
 CPHMovementControl* get_movement(CActor* pActor) { return pActor->character_physics_support()->movement(); }
 
-
-
-typedef CScriptActor::SConditionChangeV SConditionChangeV;
-typedef float SConditionChangeV::*SConditionChangeVField;
-
-template <ECondType n>
-float get_change_v(CActorCondition* C)
-{
-    return C->mcondv()[n].speed;
-}
-
-template <ECondType n>
-void set_change_v(CActorCondition* C, float v)
-{
-    C->mcondv()[n].speed = v;
-}
-
-void set_health(CActorCondition* C, float h) { C->health() = h; }
-void set_max_health(CActorCondition* C, float h) { C->max_health() = h; }
-
 float get_wound_size(CActorCondition* C, u32 bone, u32 hit_type)
 {
     if (C->wounds().size() <= bone)
@@ -94,21 +74,26 @@ void CScriptActor::script_register(lua_State* L)
 {
     module(
         L)[class_<CActorCondition>("CActorConditionBase")
-               .property("health", &CActorCondition::GetHealth, &set_health)
-               .property("health_max", &CActorCondition::GetMaxHealth, &set_max_health)
-               .def_readwrite("alcohol_health", &CActorCondition::m_fAlcohol)
-               .def_readwrite("alcohol_v", &CActorCondition::m_fV_Alcohol)
-               .def_readwrite("power_v", &CActorCondition::m_fV_Power)
-               .def_readwrite("satiety", &CActorCondition::m_fSatiety)
-               .def_readwrite("satiety_v", &CActorCondition::m_fV_Satiety)
-               .def_readwrite("satiety_health_v", &CActorCondition::m_fV_SatietyHealth)
-               .def_readwrite("satiety_power_v", &CActorCondition::m_fV_SatietyPower)
-
-               .def_readwrite("thirst", &CActorCondition::m_fThirst)
-               .def_readwrite("thirst_v", &CActorCondition::m_fV_Thirst)
+               .property("health", &CActorCondition::GetHealth, &CActorCondition::SetHealth)
+               .property("health_max", &CActorCondition::GetMaxHealth, &CActorCondition::SetMaxHealth)
+               .property("health_restore_v", &CActorCondition::GetSpeedHealth, &CActorCondition::SetSpeedHealth)
+               .property("power_v", &CActorCondition::GetSpeedPower, &CActorCondition::SetSpeedPower)
+               .property("satiety", &CActorCondition::GetSatiety, &CActorCondition::SetSatiety)
+               .property("satiety_v", &CActorCondition::GetSpeedSatiety, &CActorCondition::SetSpeedSatiety)
+               .property("thirst", &CActorCondition::GetThirst, &CActorCondition::SetThirst)
+               .property("thirst_v", &CActorCondition::GetSpeedThirst, &CActorCondition::SetSpeedThirst)
+               .property("alcohol_health", &CActorCondition::GetAlcohol, &CActorCondition::SetAlcohol)
+               .property("alcohol_v", &CActorCondition::GetSpeedAlcohol, &CActorCondition::SetSpeedAlcohol)
+               .property("radiation_v", &CActorCondition::GetSpeedRadiation, &CActorCondition::SetSpeedRadiation)
+               .property("psy_health_v", &CActorCondition::GetSpeedPsyHealth, &CActorCondition::SetSpeedPsyHealth)
+               .property("morale_v", &CActorCondition::GetSpeedEntityMorale, &CActorCondition::SetSpeedEntityMorale)
                .def_readwrite("thirst_health_v", &CActorCondition::m_fV_ThirstHealth)
                .def_readwrite("thirst_power_v", &CActorCondition::m_fV_ThirstPower)
-
+               .def_readwrite("satiety_health_v", &CActorCondition::m_fV_SatietyHealth)
+               .def_readwrite("satiety_power_v", &CActorCondition::m_fV_SatietyPower)
+               .def_readwrite("radiation_health_v", &CEntityCondition::m_fV_RadiationHealth)
+               .def_readwrite("bleeding_v", &CEntityCondition::m_fV_Bleeding)
+               .def_readwrite("wound_incarnation_v", &CEntityCondition::m_fV_WoundIncarnation)
                .def_readwrite("max_power_leak_speed", &CActorCondition::m_fPowerLeakSpeed)
                .def_readwrite("jump_power", &CActorCondition::m_fJumpPower)
                .def_readwrite("stand_power", &CActorCondition::m_fStandPower)
@@ -120,10 +105,7 @@ void CScriptActor::script_register(lua_State* L)
                .def_readwrite("accel_k", &CActorCondition::m_fAccelK)
                .def_readwrite("sprint_k", &CActorCondition::m_fSprintK)
                .def_readwrite("max_walk_weight", &CActorCondition::m_MaxWalkWeight)
-
-               //.def_readwrite("health_hit_part",			&CActorCondition::m_fHealthHitPart)
                .def_readwrite("power_hit_part", &CActorCondition::m_fPowerHitPart)
-
                .def_readwrite("limping_power_begin", &CActorCondition::m_fLimpingPowerBegin)
                .def_readwrite("limping_power_end", &CActorCondition::m_fLimpingPowerEnd)
                .def_readwrite("cant_walk_power_begin", &CActorCondition::m_fCantWalkPowerBegin)
@@ -135,18 +117,9 @@ void CScriptActor::script_register(lua_State* L)
                .property("limping", &IsLimping)
                .property("cant_walk", &IsCantWalk)
                .property("cant_sprint", &IsCantSprint)
-
-
-               .property("health_restore_v", &get_change_v<eCondTypeHealth>, &set_change_v<eCondTypeHealth>)
-               .property("radiation_v", &get_change_v<eCondTypeRadiation>, &set_change_v<eCondTypeRadiation>)
-               .property("psy_health_v", &get_change_v<eCondTypePsyHealth>, &set_change_v<eCondTypePsyHealth>)
-               .property("morale_v", &get_change_v<eCondTypeMorale>, &set_change_v<eCondTypeMorale>)
-               .def_readwrite("radiation_health_v", &CEntityCondition::m_fV_RadiationHealth)
-               .def_readwrite("bleeding_v", &CEntityCondition::m_fV_Bleeding)
-               .def_readwrite("wound_incarnation_v", &CEntityCondition::m_fV_WoundIncarnation)
                .def("get_wound_size", &get_wound_size)
                .def("get_wound_total_size", &get_wound_total_size)
-               //.property("class_name",						&get_lua_class_name)
+               //.property("class_name", &get_lua_class_name)
            ,
            class_<CActorConditionObject, bases<CActorCondition, CEntityCondition>>("CActorCondition") // нормальное наследование свойств происходит через Ж (
            ,
@@ -157,7 +130,7 @@ void CScriptActor::script_register(lua_State* L)
                .def_readwrite("collision_damage_factor", &CPHMovementControl::fCollisionDamageFactor)
                .def_readwrite("air_control_param", &CPHMovementControl::fAirControlParam)
                .property("jump_up_velocity", &get_jump_up_velocity, &CPHMovementControl::SetJumpUpVelocity)
-           //.property("class_name",						&get_lua_class_name)
+               //.property("class_name", &get_lua_class_name)
            ,
            class_<CActor, bases<CInventoryOwner, CGameObject>>("CActorBase")
                .property("condition", &get_actor_condition)

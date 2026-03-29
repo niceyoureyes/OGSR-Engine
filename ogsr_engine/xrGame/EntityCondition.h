@@ -13,18 +13,13 @@ class CEntityCondition;
 
 using namespace ALife;
 
-struct SEntityConditionUI
-{
-    float passed_time;
-    float accum_val;
-};
-
 struct SEntityConditionVal
 {
     float cur;
     float min;
     float max;
     float speed;
+    float speed_total;
     float deltas;
 };
 
@@ -38,10 +33,25 @@ public:
     IC float GetMaxHealth() const { return m_fHealthMax; }
     IC float& health() { return m_fHealth; }
     IC float& max_health() { return m_fHealthMax; }
+    float SetHealth(float val) { m_fHealth = val; }
+    float SetMaxHealth(float val) { m_fHealthMax = val; }
 
 private:
     float m_fHealth;
     float m_fHealthMax;
+};
+
+class CondScaler
+{
+public:
+    CondScaler() {}
+    virtual ~CondScaler() {};
+
+    void Load(SEntityConditionVal m_conds) {}
+
+    float Scale(ECondType cond_from, ECondType cond_to, float cond_from_value) { return 1.f; }
+
+private:
 };
 
 class CEntityCondition : public CEntityConditionSimple, public CHitImmunity
@@ -62,41 +72,145 @@ public:
 
     float& par_value(LPCSTR name);
     void par_load(LPCSTR sect, LPCSTR prefix);
-    SEntityConditionVal* mcondv() { return m_conds; }
 
     /**************** GET user functions ****************/
 
     //current
-    float GetValue(ECondType val_type) const { return ((val_type == eCondTypeHealth) ? GetHealth() : m_conds[val_type].cur); }
-    IC virtual float GetPower() const { return GetValue(eCondTypePower); }
-    IC virtual float GetRadiation() const { return GetValue(eCondTypeRadiation); }
-    IC virtual float GetPsyHealth() const { return GetValue(eCondTypePsyHealth); }
-    IC virtual float GetAlcohol() const { return GetValue(eCondTypeAlcohol); }
-    IC virtual float GetSatiety() const { return GetValue(eCondTypeSatiety); }
-    IC virtual float GetThirst() const { return GetValue(eCondTypeThirst); }
-    IC virtual float GetEntityMorale() const { return GetValue(eCondTypeMorale); }
+    IC float GetValue(ECondType val_type)
+    {
+        return ((val_type == eCondTypeBleeding) ? BleedingSpeed() : GetValue_(val_type));
+    }
+    IC float GetValue_(ECondType val_type) const
+    {
+        return ((val_type == eCondTypeHealth) ? GetHealth() : m_conds[val_type].cur);
+    }
+    IC float GetPower() const { return GetValue_(eCondTypePower); }
+    IC float GetRadiation() const { return GetValue_(eCondTypeRadiation); }
+    IC float GetPsyHealth() const { return GetValue_(eCondTypePsyHealth); }
+    IC float GetAlcohol() const { return GetValue_(eCondTypeAlcohol); }
+    IC float GetSatiety() const { return GetValue_(eCondTypeSatiety); }
+    IC float GetThirst() const { return GetValue_(eCondTypeThirst); }
+    IC float GetEntityMorale() const { return GetValue_(eCondTypeMorale); }
 
     //max
-    IC float GetMaxValue(ECondType val_type) const { return m_conds[val_type].max; }
+    IC float GetMaxValue(ECondType val_type) const
+    {
+        return ((val_type == eCondTypeHealth) ? GetMaxHealth() : m_conds[val_type].max);
+    }
     IC float GetMaxPower() const { return GetMaxValue(eCondTypePower); };
+    IC float GetMaxRadiation() const { return GetMaxValue(eCondTypeRadiation); }
+    IC float GetMaxPsyHealth() const { return GetMaxValue(eCondTypePsyHealth); }
+    IC float GetMaxAlcohol() const { return GetMaxValue(eCondTypeAlcohol); }
+    IC float GetMaxSatiety() const { return GetMaxValue(eCondTypeSatiety); }
+    IC float GetMaxThirst() const { return GetMaxValue(eCondTypeThirst); }
+    IC float GetMaxEntityMorale() const { return GetMaxValue(eCondTypeMorale); }
 
-    /**************** GET LVAL user functions ****************/
+    // speed
+    IC float GetSpeedValue(ECondType val_type) const
+    {
+        return m_conds[val_type].speed;
+    }
+    IC float GetSpeedHealth() const { return GetSpeedValue(eCondTypeHealth); }
+    IC float GetSpeedPower() const { return GetSpeedValue(eCondTypePower); };
+    IC float GetSpeedRadiation() const { return GetSpeedValue(eCondTypeRadiation); }
+    IC float GetSpeedPsyHealth() const { return GetSpeedValue(eCondTypePsyHealth); }
+    IC float GetSpeedAlcohol() const { return GetSpeedValue(eCondTypeAlcohol); }
+    IC float GetSpeedSatiety() const { return GetSpeedValue(eCondTypeSatiety); }
+    IC float GetSpeedThirst() const { return GetSpeedValue(eCondTypeThirst); }
+    IC float GetSpeedEntityMorale() const { return GetSpeedValue(eCondTypeMorale); }
 
-    //current
-    IC float& value(ECondType val_type) { return m_conds[val_type].cur; }
-    IC float& power() { return value(eCondTypePower); }
-    IC float& radiation() { return value(eCondTypeRadiation); }
+    //speed total
+    IC float GetSpeedTotalValue(ECondType val_type) const
+    {
+        return m_conds[val_type].speed_total;
+    }
+    IC float GetSpeedTotalHealth() const { return GetSpeedTotalValue(eCondTypeHealth); }
+    IC float GetSpeedTotalPower() const { return GetSpeedTotalValue(eCondTypePower); };
+    IC float GetSpeedTotalRadiation() const { return GetSpeedTotalValue(eCondTypeRadiation); }
+    IC float GetSpeedTotalPsyHealth() const { return GetSpeedTotalValue(eCondTypePsyHealth); }
+    IC float GetSpeedTotalAlcohol() const { return GetSpeedTotalValue(eCondTypeAlcohol); }
+    IC float GetSpeedTotalSatiety() const { return GetSpeedTotalValue(eCondTypeSatiety); }
+    IC float GetSpeedTotalThirst() const { return GetSpeedTotalValue(eCondTypeThirst); }
+    IC float GetSpeedTotalEntityMorale() const { return GetSpeedTotalValue(eCondTypeMorale); }
 
-    //max
-    IC float& value_max(ECondType val_type) { return m_conds[val_type].max; }
-    
     /**************** SET user functions ****************/
 
     //current
-    void SetValue(ECondType val_type, float value) { ((val_type == eCondTypeHealth) ? health() : m_conds[val_type].cur) = value; }
+    void SetValue(ECondType val_type, float value)
+    {
+        if (val_type == eCondTypeHealth)
+        {
+            clamp(value, 0.f, GetMaxHealth());
+            health() = value;
+        }
+        else
+        {
+            clamp(value, m_conds[val_type].min, m_conds[val_type].max);
+            m_conds[val_type].cur = value;
+        }
+    }
+    float SetPower(float value) { SetValue(eCondTypePower, value); }
+    float SetRadiation(float value) { SetValue(eCondTypeRadiation, value); }
+    float SetPsyHealth(float value) { SetValue(eCondTypePsyHealth, value); }
+    float SetAlcohol(float value) { SetValue(eCondTypeAlcohol, value); }
+    float SetSatiety(float value) { SetValue(eCondTypeSatiety, value); }
+    float SetThirst(float value) { SetValue(eCondTypeThirst, value); }
+    float SetEntityMorale(float value) { SetValue(eCondTypeMorale, value); }
 
+    //max
+    void SetMaxValue(ECondType val_type, float value)
+    {
+        if (val_type == eCondTypeHealth)
+        {
+            SetMaxHealth(value);
+        }
+        else
+        {
+            m_conds[val_type].max = value;
+        }
+    }
+    void SetMaxPower(float value) { SetMaxValue(eCondTypePower, value); }
+    void SetMaxRadiation(float value) { SetMaxValue(eCondTypeRadiation, value); }
+    void SetMaxPsyHealth(float value) { SetMaxValue(eCondTypePsyHealth, value); }
+    void SetMaxAlcohol(float value) { SetMaxValue(eCondTypeAlcohol, value); }
+    void SetMaxSatiety(float value) { SetMaxValue(eCondTypeSatiety, value); }
+    void SetMaxThirst(float value) { SetMaxValue(eCondTypeThirst, value); }
+    void SetMaxEntityMorale(float value) { SetMaxValue(eCondTypeMorale, value); }
+
+    //speed
+    void SetSpeedValue(ECondType val_type, float value) { m_conds[val_type].speed = value; }
+    void SetSpeedHealth(float value) { SetSpeedValue(eCondTypeHealth, value); }
+    void SetSpeedPower(float value) { SetSpeedValue(eCondTypePower, value); };
+    void SetSpeedRadiation(float value) { SetSpeedValue(eCondTypeRadiation, value); }
+    void SetSpeedPsyHealth(float value) { SetSpeedValue(eCondTypePsyHealth, value); }
+    void SetSpeedAlcohol(float value) { SetSpeedValue(eCondTypeAlcohol, value); }
+    void SetSpeedSatiety(float value) { SetSpeedValue(eCondTypeSatiety, value); }
+    void SetSpeedThirst(float value) { SetSpeedValue(eCondTypeThirst, value); }
+    void SetSpeedEntityMorale(float value) { SetSpeedValue(eCondTypeMorale, value); }
 
     /**************** CHANGE user functions ****************/
+
+    //current and deltas
+    void ChangeCurrValue(ECondType val_type)
+    {
+        if (val_type == eCondTypeHealth)
+        {
+            health() += m_conds[eCondTypeHealth].deltas;
+            clamp(health(), m_conds[eCondTypeHealth].min, m_conds[eCondTypeHealth].max);
+        }
+        else if (val_type == eCondTypeBleeding)
+        {
+            ChangeBleeding(m_conds[eCondTypeBleeding].deltas);
+        }
+        else
+        {
+            m_conds[val_type].cur += m_conds[val_type].deltas;
+            clamp(m_conds[val_type].cur, m_conds[val_type].min, m_conds[val_type].max);
+        }
+
+        m_conds[val_type].deltas = 0;
+        m_conds[val_type].speed_total = 0;
+    }
     void ChangeValue( ECondType val_type, float value )
     {
         if (val_type == eCondTypeHealth && CanBeHarmed() == false)
@@ -105,19 +219,50 @@ public:
         VERIFY(_valid(value));
         m_conds[val_type].deltas += value;
     }
-    virtual void ChangeHealth(float value) { ChangeValue(eCondTypeHealth, value); }
-    virtual void ChangePower(float value) { ChangeValue(eCondTypePower, value); }
-    virtual void ChangeRadiation(float value) { ChangeValue(eCondTypeRadiation, value); }
-    virtual void ChangePsyHealth(float value) { ChangeValue(eCondTypePsyHealth, value); }
-    virtual void ChangeAlcohol(float value) { ChangeValue(eCondTypeAlcohol, value); };
-    virtual void ChangeSatiety(float value) { ChangeValue(eCondTypeSatiety, value); };
-    virtual void ChangeThirst(float value) { ChangeValue(eCondTypeThirst, value); };
-    virtual void ChangeEntityMorale(float value) { ChangeValue(eCondTypeMorale, value); }
+    void ChangeHealth(float value) { ChangeValue(eCondTypeHealth, value); }
+    void ChangePower(float value) { ChangeValue(eCondTypePower, value); }
+    void ChangeRadiation(float value) { ChangeValue(eCondTypeRadiation, value); }
+    void ChangePsyHealth(float value) { ChangeValue(eCondTypePsyHealth, value); }
+    void ChangeAlcohol(float value) { ChangeValue(eCondTypeAlcohol, value); };
+    void ChangeSatiety(float value) { ChangeValue(eCondTypeSatiety, value); };
+    void ChangeThirst(float value) { ChangeValue(eCondTypeThirst, value); };
+    void ChangeEntityMorale(float value) { ChangeValue(eCondTypeMorale, value); }
     void ChangeBleeding(float percent);
+
+    //total speed
+    void ChangeSpeedTotalValue(ECondType val_type, float value)
+    {
+        m_conds[val_type].speed_total += value;
+    }
+    void ChangeHealth(float value) { ChangeSpeedTotalValue(eCondTypeHealth, value); }
+    void ChangePower(float value) { ChangeSpeedTotalValue(eCondTypePower, value); }
+    void ChangeRadiation(float value) { ChangeSpeedTotalValue(eCondTypeRadiation, value); }
+    void ChangePsyHealth(float value) { ChangeSpeedTotalValue(eCondTypePsyHealth, value); }
+    void ChangeAlcohol(float value) { ChangeSpeedTotalValue(eCondTypeAlcohol, value); };
+    void ChangeSatiety(float value) { ChangeSpeedTotalValue(eCondTypeSatiety, value); };
+    void ChangeThirst(float value) { ChangeSpeedTotalValue(eCondTypeThirst, value); };
+    void ChangeEntityMorale(float value) { ChangeSpeedTotalValue(eCondTypeMorale, value); }
+    
+    /**************** GETREL user functions ****************/
+
+    float GetRel(ECondType from_type, ECondType to_type)
+    {
+        return m_conds_rel[std::make_pair(from_type, to_type)];
+    }
+    float GetRel_RadiationHealth() { return GetRel(eCondTypeRadiation, eCondTypeHealth); }
+    float GetRel_BleedingHealth() { return GetRel(eCondTypeBleeding, eCondTypeHealth); }
+
+    /**************** SETREL user functions ****************/
+
+    void SetRel(ECondType from_type, ECondType to_type, float value)
+    {
+        m_conds_rel[std::make_pair(from_type, to_type)] = value;
+    }
+    void SetRel_RadiationHealth(float value) { SetRel(eCondTypeRadiation, eCondTypeHealth, value); }
+    void SetRel_BleedingHealth(float value) { SetRel(eCondTypeBleeding, eCondTypeHealth, value); }
 
     /**************** OTHER user functions ****************/
     IC float GetHealthLost() const { return m_fHealthLost; }
-    IC void SetMaxPower(float val) { clamp(val, 0.1f, 1.0f); m_conds[eCondTypePower].max = val; };
     virtual CWound* ConditionHit(SHit* pHDS);
     IC const float fdelta_time() const { return (m_fDeltaTime); }
     IC float& hit_bone_scale() { return (m_fHitBoneScale); }
@@ -130,11 +275,12 @@ public:
     void ClearWounds();
 
     // Обновления состояния с течением времени
+    IC void SetConditionDeltaTime(float DeltaTime) { m_fDeltaTime = DeltaTime; };
+    void UpdateConditionTime();
     virtual void UpdateCondition();
     void UpdateHealth();
+    void UpdatePower();
     void UpdateWounds();
-    void UpdateConditionTime();
-    IC void SetConditionDeltaTime(float DeltaTime) { m_fDeltaTime = DeltaTime; };
     
     // WHO functions
     CObject* GetWhoHitLastTime() { return m_pWho; }
@@ -157,12 +303,10 @@ protected:
     // величины
     bool m_conds_active[ALife::eCondTypeMax];
     SEntityConditionVal m_conds[ALife::eCondTypeMax];
-    SEntityConditionUI m_conds_UI[ALife::eCondTypeMax];
+    std::map<std::pair<ECondType, ECondType>, float> m_conds_rel;
+    CondScaler m_scaler;
 
     // величины кастом
-    float m_fV_RadiationHealth;
-    float m_fV_Bleeding;
-    float m_fV_WoundIncarnation;
     float m_fMinWoundSize;
     bool m_bIsBleeding;
 

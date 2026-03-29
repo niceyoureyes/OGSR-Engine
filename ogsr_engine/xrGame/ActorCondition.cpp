@@ -326,88 +326,6 @@ float CActorCondition::GetInjuriousMaterialDamage()
     return 0.0f;
 }
 
-void CActorCondition::UpdateSatiety()
-{
-    if (m_fSatiety > 0)
-    {
-        m_fSatiety -= m_fV_Satiety * m_fDeltaTime;
-        clamp(m_fSatiety, 0.0f, 1.0f);
-    }
-
-    float satiety_health_koef = 1;
-    float satiety_power_koef = 1;
-
-    if (m_fSatietyLightLimit > 0)
-    {
-        if (m_fSatiety < m_fSatietyLightLimit)
-        {
-            satiety_power_koef = m_fSatiety / m_fSatietyLightLimit;
-
-            const float critical_k = m_fSatietyCriticalLimit / m_fSatietyLightLimit;
-            satiety_health_koef = (m_fSatiety / m_fSatietyLightLimit - critical_k) / (m_fSatiety >= m_fSatietyCriticalLimit ? 1 - critical_k : critical_k);
-        }
-    }
-    else
-    {
-        if (fis_zero(m_fSatiety))
-        {
-            satiety_health_koef = -1;
-        }
-    }
-
-    if (m_bIsBleeding && satiety_health_koef > 0)
-    {
-        satiety_health_koef = 0;
-    }
-
-    ChangeHealth(m_fV_SatietyHealth * satiety_health_koef * m_fDeltaTime);
-    ChangePower(m_fV_SatietyPower * satiety_power_koef * m_fDeltaTime);
-}
-
-void CActorCondition::UpdateThirst()
-{
-    if (m_fThirst > 0)
-    {
-        m_fThirst -= m_fV_Thirst * m_fDeltaTime;
-        clamp(m_fThirst, 0.0f, 1.0f);
-    }
-
-    float thirst_health_koef = 1;
-    float thirst_power_koef = 0;
-
-    if (m_fThirstLightLimit > 0)
-    {
-        if (m_fThirst < m_fThirstLightLimit)
-        {
-            thirst_power_koef = (1 - m_fThirst / m_fThirstLightLimit) * -1;
-
-            const float critical_k = m_fThirstCriticalLimit / m_fThirstLightLimit;
-            thirst_health_koef = (m_fThirst / m_fThirstLightLimit - critical_k) / (m_fThirst >= m_fThirstCriticalLimit ? 1 - critical_k : critical_k);
-        }
-    }
-    else
-    {
-        if (fis_zero(m_fThirst))
-        {
-            thirst_health_koef = -1;
-        }
-    }
-
-    if (m_bIsBleeding && thirst_health_koef > 0)
-    {
-        thirst_health_koef = 0;
-    }
-
-    ChangeHealth(m_fV_ThirstHealth * thirst_health_koef * m_fDeltaTime);
-    ChangePower(m_fV_ThirstPower * thirst_power_koef * m_fDeltaTime);
-}
-
-void CActorCondition::UpdatePower()
-{
-    power() += m_fV_Power * m_fDeltaTime;
-    clamp(power(), 0.0f, 1.0f);
-}
-
 CWound* CActorCondition::ConditionHit(SHit* pHDS)
 {
     if (GodMode())
@@ -417,8 +335,7 @@ CWound* CActorCondition::ConditionHit(SHit* pHDS)
 
 void CActorCondition::PowerHit(float power_, bool apply_outfit)
 {
-    power() -= apply_outfit ? HitPowerEffect(power_) : power_;
-    clamp(power(), 0.f, 1.f);
+    SetPower(GetPower() - (apply_outfit ? HitPowerEffect(power_) : power_));
 }
 
 // weight - "удельный" вес от 0..1
@@ -426,28 +343,28 @@ void CActorCondition::ConditionJump(float weight)
 {
     float power_ = m_fJumpPower;
     power_ += m_fJumpWeightPower * weight * (weight > 1.f ? m_fOverweightJumpK : 1.f);
-    power() -= HitPowerEffect(power_);
+    SetPower(GetPower() - HitPowerEffect(power_));
 }
 void CActorCondition::ConditionWalk(float weight, bool accel, bool sprint)
 {
     float power_ = m_fWalkPower;
     power_ += m_fWalkWeightPower * weight * (weight > 1.f ? m_fOverweightWalkK : 1.f);
     power_ *= m_fDeltaTime * (accel ? (sprint ? m_fSprintK : m_fAccelK) : 1.f);
-    power() -= HitPowerEffect(power_);
+    SetPower(GetPower() - HitPowerEffect(power_));
 }
 
 void CActorCondition::ConditionStand(float weight)
 {
     float power_ = m_fStandPower;
     power_ *= m_fDeltaTime;
-    power() -= power_;
+    SetPower(GetPower() - power_);
 }
 
 bool CActorCondition::IsCantWalk()
 {
-    if (power() < m_fCantWalkPowerBegin)
+    if (GetPower() < m_fCantWalkPowerBegin)
         m_condition_flags.set(eCantWalk, TRUE);
-    else if (power() > m_fCantWalkPowerEnd)
+    else if (GetPower() > m_fCantWalkPowerEnd)
         m_condition_flags.set(eCantWalk, FALSE);
     return m_condition_flags.test(eCantWalk);
 }
@@ -472,9 +389,9 @@ bool CActorCondition::IsCantWalkWeight()
 
 bool CActorCondition::IsCantSprint()
 {
-    if (power() < m_fCantSprintPowerBegin)
+    if (GetPower() < m_fCantSprintPowerBegin)
         m_condition_flags.set(eCantSprint, TRUE);
-    else if (power() > m_fCantSprintPowerEnd)
+    else if (GetPower() > m_fCantSprintPowerEnd)
         m_condition_flags.set(eCantSprint, FALSE);
     return m_condition_flags.test(eCantSprint);
 }
@@ -488,14 +405,14 @@ bool CActorCondition::IsCantJump(float weight)
 
     float power_ = m_fJumpPower;
     power_ += m_fJumpWeightPower * weight * (weight > 1.f ? m_fOverweightJumpK : 1.f);
-    return power() < HitPowerEffect(power_);
+    return GetPower() < HitPowerEffect(power_);
 }
 
 bool CActorCondition::IsLimping()
 {
-    if (power() < m_fLimpingPowerBegin || GetHealth() < m_fLimpingHealthBegin)
+    if (GetPower() < m_fLimpingPowerBegin || GetHealth() < m_fLimpingHealthBegin)
         m_condition_flags.set(eLimping, TRUE);
-    else if (power() > m_fLimpingPowerEnd && GetHealth() > m_fLimpingHealthEnd)
+    else if (GetPower() > m_fLimpingPowerEnd && GetHealth() > m_fLimpingHealthEnd)
         m_condition_flags.set(eLimping, FALSE);
     return m_condition_flags.test(eLimping);
 }

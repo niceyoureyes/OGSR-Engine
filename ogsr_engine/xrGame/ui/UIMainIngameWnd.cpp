@@ -4,6 +4,8 @@
 #include "UIMessagesWindow.h"
 #include "../UIZoneMap.h"
 
+#include <iostream>
+#include <fstream>
 #include <dinput.h>
 #include "../actor.h"
 #include "../HUDManager.h"
@@ -431,28 +433,37 @@ void CUIMainIngameWnd::Update()
     // health&armor
     UIHealthBar.SetProgressPos(m_pActor->GetfHealth() * 100.0f);
     UIMotionIcon.SetPower(m_pActor->conditions().GetPower() * 100.0f);
-    m_pActor->GetMaxHealth();
-    m_pActor->conditions();
+
+    m_pActor->ActiveArtefactsOnBelt().HealthRestoreSpeed;
+
+
+    Actor()->ActiveArtefactsOnBelt().HealthRestoreSpeed
+
+    static std::deque<float> q;
+    static SEntityConditionUI conds_UI = {0, 0};
+    static float hspeed = 0;
 
     string128 _buff;
     long long cval = (long long)(m_pActor->conditions().GetHealth() * 1000);
     long long cvalmax = (long long)(m_pActor->conditions().GetMaxHealth() * 1000);
-    float cvaldiff = (float)(m_pActor->conditions().GetHealthDeltaUI());
-    //static long long cvaldiffmin = 1000000;
-    //static long long cvaldiffmax = -1000000;
-    static float cvaldiffmed = 0;
-    static std::queue<float> dcval;
-    dcval.push(cvaldiff);
-    cvaldiffmed += cvaldiff;
-    if (dcval.size() > 25)
+    SEntityConditionUI &newdiff = m_pActor->conditions().mcondv_UI()[eCondTypeHealth];
+
+    q.push_back((newdiff.passed_time > 0.0f) ? newdiff.accum_val / newdiff.passed_time : 0.0f);
+    //conds_UI.accum_val += newdiff.accum_val;
+    //conds_UI.passed_time += newdiff.passed_time;
+    newdiff.accum_val = 0;
+    newdiff.passed_time = 0;
+
+    if (q.size() > 20)
     {
-        cvaldiffmed -= dcval.front();
-        dcval.pop();
+        //conds_UI.accum_val -= q.front().accum_val;
+        //conds_UI.passed_time -= q.front().passed_time;
+        q.pop_front();
     }
 
-    //cvaldiffmin = std::min(cvaldiffmin, cvaldiff);
-    //cvaldiffmax = std::max(cvaldiffmax, cvaldiff);
-    sprintf_s(_buff, sizeof(_buff), "%04lld/%04lld %s%.10f", cval, cvalmax, (cvaldiffmed >= 0 ? "+" : ""), (cvaldiffmed / 25));
+    hspeed = *std::max_element(q.begin(), q.end());
+
+    sprintf_s(_buff, sizeof(_buff), "%04lld/%04lld %s%.6f", cval, cvalmax, (hspeed >= 0 ? "+" : ""), hspeed);
 
     UIHealthBar.m_UIProgressItem.SetVTextAlignment(valCenter);
     UIHealthBar.m_UIProgressItem.SetText(_buff);

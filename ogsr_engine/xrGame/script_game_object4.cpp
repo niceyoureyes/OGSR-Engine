@@ -334,7 +334,6 @@ void CScriptGameObject::UpdateCondition()
     // в CEntityAlive::shedule_Update() вызовы идут именно в этом порядке
     e->conditions().UpdateConditionTime();
     e->conditions().UpdateCondition();
-    e->conditions().UpdateWounds();
 }
 
 void CScriptGameObject::ChangeBleeding(float _delta)

@@ -198,8 +198,6 @@ void CEntityAlive::shedule_Update(u32 dt)
     UpdateFireParticles();
     //капли крови
     UpdateBloodDrops();
-    //обновить раны
-    conditions().UpdateWounds();
 
     //убить сущность
     if (Local() && !g_Alive() && !AlreadyDie())
@@ -573,33 +571,12 @@ CEntityConditionSimple* CEntityAlive::create_entity_condition(CEntityConditionSi
     return (inherited::create_entity_condition(m_entity_condition));
 }
 
-/*
-float CEntityAlive::GetfHealth	() const
-{
-    return conditions().health()*100.f;
-}
-
-float CEntityAlive::SetfHealth	(float value)
-{
-    conditions().health() = value/100.f;
-    return value;
-}
-*/
 float CEntityAlive::SetfRadiation(float value)
 {
-    conditions().radiation() = value / 100.f;
+    conditions().SetRadiation(value / 100.f);
     return value;
 }
-/*
-float CEntityAlive::g_Health	() const
-{
-    return conditions().GetHealth()*100.f;
-}
-float CEntityAlive::g_MaxHealth	() const
-{
-    return conditions().GetMaxHealth()*100.f;
-}
-*/
+
 float CEntityAlive::g_Radiation() const { return conditions().GetRadiation() * 100.f; }
 
 DLL_Pure* CEntityAlive::_construct()

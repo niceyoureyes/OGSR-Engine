@@ -23,8 +23,6 @@ class CActorConditionObject : public CActorCondition
 class CScriptActor
 {
 public:
-    typedef CEntityCondition::SConditionChangeV SConditionChangeV;
-
     IC static HitImmunity::HitTypeSVec& immunities(CActorCondition* C) { return C->m_HitTypeK; };
     IC static float& jump_speed(CActor* A) { return A->m_fJumpSpeed; }
 
