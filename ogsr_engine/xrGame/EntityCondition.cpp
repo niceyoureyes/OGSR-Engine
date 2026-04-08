@@ -37,6 +37,7 @@ CEntityCondition::CEntityCondition(CEntityAlive* object) : CEntityConditionSimpl
 
     m_conds_active[eCondTypeHealth] = 1;
     m_conds_active[eCondTypePower] = 1;
+    m_conds_active[eCondTypeBleeding] = 1;
     m_conds_active[eCondTypeRadiation] = 1;
     m_conds_active[eCondTypePsyHealth] = 1;
     m_conds_active[eCondTypeMorale] = 1;
@@ -98,14 +99,6 @@ void CEntityCondition::reinit_vals()
     m_conds[eCondTypeMorale].max = 1.f;
 }
 
-void CEntityCondition::reinit_vals_UI()
-{
-    for (size_t i = 0; i < eCondTypeMax; i++)
-    {
-        m_conds_UI[i] = {0, 0};
-    }
-}
-
 void CEntityCondition::reinit()
 {
     m_iLastTimeCalled = 0;
@@ -116,7 +109,6 @@ void CEntityCondition::reinit()
     m_iWhoID = NULL;
 
     reinit_vals();
-    reinit_vals_UI();
     reinit_deltas();
     ClearWounds();
 }
@@ -140,6 +132,8 @@ void CEntityCondition::LoadCondition(LPCSTR entity_section)
         s += "_hit_part";
         m_fHealthHitPart[hit_type] = READ_IF_EXISTS(pSettings, r_float, section, s.c_str(), fHealthHitPart);
     }
+
+    m_scaler.Load(eCondTypeRadiation, eCondTypeHealth, m_conds[eCondTypeRadiation].min, m_conds[eCondTypeRadiation].max, {0, 1, 3, 7, 15}, {1, 2.5, 10, 80, 2000});
 }
 
 void CEntityCondition::ChangeBleeding(float percent)
@@ -211,8 +205,17 @@ void CEntityCondition::UpdateCondition()
     if (GetHealth() <= 0)
         return;
 
-    UpdateHealth();
-    UpdateWounds();
+    if (m_conds_active[eCondTypeHealth])
+        UpdateHealth();
+
+    if (m_conds_active[eCondTypePower])
+        UpdatePower();
+
+    if (m_conds_active[eCondTypeBleeding])
+    {
+        m_bIsBleeding = fis_zero(BleedingSpeed()) ? false : true;
+        UpdateWounds();
+    }
 
     for (size_t i = 0; i < eCondTypeMax; i++)
     {
@@ -387,20 +390,19 @@ float CEntityCondition::BleedingSpeed()
 void CEntityCondition::UpdateHealth()
 {
     float rad_roat_speed = m_scaler.Scale(eCondTypeRadiation, eCondTypeHealth, GetRadiation()) * GetRel_RadiationHealth();
-    float bleeding_speed = m_scaler.Scale(eCondTypeBleeding, eCondTypeHealth, BleedingSpeed());
-    float starve_speed = m_scaler.Scale(eCondTypeSatiety, eCondTypeHealth, GetSatiety());
-    float dry_speed = m_scaler.Scale(eCondTypeThirst, eCondTypeHealth, GetThirst());
+    float bleeding_speed = m_scaler.Scale(eCondTypeBleeding, eCondTypeHealth, BleedingSpeed()) * GetRel_BleedingHealth();
+    float starve_speed = m_scaler.Scale(eCondTypeSatiety, eCondTypeHealth, GetSatiety()) * GetRel_SatietyHealth();
+    float dry_speed = m_scaler.Scale(eCondTypeThirst, eCondTypeHealth, GetThirst()) * GetRel_ThirstHealth();
 
     ChangeSpeedTotalValue(eCondTypeHealth, -1.f * (rad_roat_speed + bleeding_speed + starve_speed + dry_speed));
-    m_bIsBleeding = fis_zero(bleeding_speed) ? false : true;
 }
 
 void CEntityCondition::UpdatePower()
 {
-    float rad_roat_speed = m_scaler.Scale(eCondTypeRadiation, eCondTypePower, GetRadiation());
-    float bleeding_speed = m_scaler.Scale(eCondTypeBleeding, eCondTypePower, BleedingSpeed());
-    float starve_speed = m_scaler.Scale(eCondTypeSatiety, eCondTypePower, GetSatiety());
-    float dry_speed = m_scaler.Scale(eCondTypeThirst, eCondTypePower, GetThirst());
+    float rad_roat_speed = m_scaler.Scale(eCondTypeRadiation, eCondTypePower, GetRadiation()) * GetRel_RadiationPower();
+    float bleeding_speed = m_scaler.Scale(eCondTypeBleeding, eCondTypePower, BleedingSpeed()) * GetRel_BleedingPower();
+    float starve_speed = m_scaler.Scale(eCondTypeSatiety, eCondTypePower, GetSatiety()) * GetRel_SatietyPower();
+    float dry_speed = m_scaler.Scale(eCondTypeThirst, eCondTypePower, GetThirst()) * GetRel_ThirstPower();
     
     ChangeSpeedTotalValue(eCondTypePower, GetSpeedPower() / (rad_roat_speed + bleeding_speed + starve_speed + dry_speed));
 }

@@ -44,14 +44,61 @@ private:
 class CondScaler
 {
 public:
+    typedef std::pair<ECondType, ECondType> cond_pair;
+    typedef std::pair<std::vector<float>, std::vector<float>> scalers;
+    typedef std::map<cond_pair, scalers> scale_store;
     CondScaler() {}
     virtual ~CondScaler() {};
 
-    void Load(SEntityConditionVal m_conds) {}
+    void Load(ECondType cond_from, ECondType cond_to, float cond_from_val_start, float cond_from_val_finish, std::vector<float> val_steps, std::vector<float> mult_steps)
+    {
+        if (val_steps.size() != mult_steps.size())
+            return;
 
-    float Scale(ECondType cond_from, ECondType cond_to, float cond_from_value) { return 1.f; }
+        std::sort(val_steps.begin(), val_steps.end());
+        float val_step_min = val_steps.front();
+        float val_step_range = val_steps.back() - val_steps.front();
+        float cond_from_min = cond_from_val_start;
+        float cond_from_range = cond_from_val_finish - cond_from_val_start;
+
+        std::for_each(val_steps.begin(), val_steps.end(), [=](float& val) { val = (val - val_step_min) / val_step_range * cond_from_range + cond_from_min; });
+
+        m_conds_scale[std::make_pair(cond_from, cond_to)] = std::make_pair(val_steps, mult_steps);
+    }
+
+    float Scale(ECondType cond_from, ECondType cond_to, float val)
+    {
+        return GetCurrScale(cond_from, cond_to, val).second * val;
+    }
+
+    std::pair<int, float> GetCurrScale(ECondType cond_from, ECondType cond_to, float cond_from_value)
+    {
+        scale_store::iterator it;
+
+        if ((it = m_conds_scale.find(std::make_pair(cond_from, cond_to))) == m_conds_scale.end())
+            return std::make_pair(-1, 1.f);
+
+        scalers& sc = it->second;
+        std::vector<float> &val_steps = sc.first;
+        std::vector<float> &mult_steps = sc.second;
+        
+        if (cond_from_value < val_steps.front())
+            return std::make_pair(0, mult_steps.front());
+
+        for (size_t i = 0; i < val_steps.size() - 1; i++)
+        {
+            if ((fsimilar(val_steps[i], cond_from_value) || val_steps[i] <= cond_from_value) &&
+                (fsimilar(cond_from_value, val_steps[i + 1]) || cond_from_value <= val_steps[i + 1]))
+            {
+                return std::make_pair(i, mult_steps[i] + (cond_from_value - val_steps[i]) * ((mult_steps[i + 1] - mult_steps[i]) / (val_steps[i + 1] - val_steps[i])));
+            }
+        }
+
+        return std::make_pair(val_steps.size() - 1, mult_steps.back());
+    }
 
 private:
+    scale_store m_conds_scale;
 };
 
 class CEntityCondition : public CEntityConditionSimple, public CHitImmunity
@@ -85,6 +132,7 @@ public:
         return ((val_type == eCondTypeHealth) ? GetHealth() : m_conds[val_type].cur);
     }
     IC float GetPower() const { return GetValue_(eCondTypePower); }
+    IC float GetBleeding() { return BleedingSpeed(); }
     IC float GetRadiation() const { return GetValue_(eCondTypeRadiation); }
     IC float GetPsyHealth() const { return GetValue_(eCondTypePsyHealth); }
     IC float GetAlcohol() const { return GetValue_(eCondTypeAlcohol); }
@@ -111,7 +159,8 @@ public:
         return m_conds[val_type].speed;
     }
     IC float GetSpeedHealth() const { return GetSpeedValue(eCondTypeHealth); }
-    IC float GetSpeedPower() const { return GetSpeedValue(eCondTypePower); };
+    IC float GetSpeedPower() const { return GetSpeedValue(eCondTypePower); }
+    IC float GetSpeedBleeding() const { return GetSpeedValue(eCondTypeBleeding); }
     IC float GetSpeedRadiation() const { return GetSpeedValue(eCondTypeRadiation); }
     IC float GetSpeedPsyHealth() const { return GetSpeedValue(eCondTypePsyHealth); }
     IC float GetSpeedAlcohol() const { return GetSpeedValue(eCondTypeAlcohol); }
@@ -180,7 +229,8 @@ public:
     //speed
     void SetSpeedValue(ECondType val_type, float value) { m_conds[val_type].speed = value; }
     void SetSpeedHealth(float value) { SetSpeedValue(eCondTypeHealth, value); }
-    void SetSpeedPower(float value) { SetSpeedValue(eCondTypePower, value); };
+    void SetSpeedPower(float value) { SetSpeedValue(eCondTypePower, value); }
+    void SetSpeedBleeding(float value) { SetSpeedValue(eCondTypeBleeding, value); }
     void SetSpeedRadiation(float value) { SetSpeedValue(eCondTypeRadiation, value); }
     void SetSpeedPsyHealth(float value) { SetSpeedValue(eCondTypePsyHealth, value); }
     void SetSpeedAlcohol(float value) { SetSpeedValue(eCondTypeAlcohol, value); }
@@ -211,7 +261,7 @@ public:
         m_conds[val_type].deltas = 0;
         m_conds[val_type].speed_total = 0;
     }
-    void ChangeValue( ECondType val_type, float value )
+    void ChangeValue(ECondType val_type, float value)
     {
         if (val_type == eCondTypeHealth && CanBeHarmed() == false)
             return;
@@ -234,14 +284,14 @@ public:
     {
         m_conds[val_type].speed_total += value;
     }
-    void ChangeHealth(float value) { ChangeSpeedTotalValue(eCondTypeHealth, value); }
-    void ChangePower(float value) { ChangeSpeedTotalValue(eCondTypePower, value); }
-    void ChangeRadiation(float value) { ChangeSpeedTotalValue(eCondTypeRadiation, value); }
-    void ChangePsyHealth(float value) { ChangeSpeedTotalValue(eCondTypePsyHealth, value); }
-    void ChangeAlcohol(float value) { ChangeSpeedTotalValue(eCondTypeAlcohol, value); };
-    void ChangeSatiety(float value) { ChangeSpeedTotalValue(eCondTypeSatiety, value); };
-    void ChangeThirst(float value) { ChangeSpeedTotalValue(eCondTypeThirst, value); };
-    void ChangeEntityMorale(float value) { ChangeSpeedTotalValue(eCondTypeMorale, value); }
+    void ChangeSpeedTotalHealth(float value) { ChangeSpeedTotalValue(eCondTypeHealth, value); }
+    void ChangeSpeedTotalPower(float value) { ChangeSpeedTotalValue(eCondTypePower, value); }
+    void ChangeSpeedTotalRadiation(float value) { ChangeSpeedTotalValue(eCondTypeRadiation, value); }
+    void ChangeSpeedTotalPsyHealth(float value) { ChangeSpeedTotalValue(eCondTypePsyHealth, value); }
+    void ChangeSpeedTotalAlcohol(float value) { ChangeSpeedTotalValue(eCondTypeAlcohol, value); };
+    void ChangeSpeedTotalSatiety(float value) { ChangeSpeedTotalValue(eCondTypeSatiety, value); };
+    void ChangeSpeedTotalThirst(float value) { ChangeSpeedTotalValue(eCondTypeThirst, value); };
+    void ChangeSpeedTotalEntityMorale(float value) { ChangeSpeedTotalValue(eCondTypeMorale, value); }
     
     /**************** GETREL user functions ****************/
 
@@ -251,6 +301,12 @@ public:
     }
     float GetRel_RadiationHealth() { return GetRel(eCondTypeRadiation, eCondTypeHealth); }
     float GetRel_BleedingHealth() { return GetRel(eCondTypeBleeding, eCondTypeHealth); }
+    float GetRel_SatietyHealth() { return GetRel(eCondTypeSatiety, eCondTypeHealth); }
+    float GetRel_ThirstHealth() { return GetRel(eCondTypeThirst, eCondTypeHealth); }
+    float GetRel_RadiationPower() { return GetRel(eCondTypeRadiation, eCondTypePower); }
+    float GetRel_BleedingPower() { return GetRel(eCondTypeBleeding, eCondTypePower); }
+    float GetRel_SatietyPower() { return GetRel(eCondTypeSatiety, eCondTypePower); }
+    float GetRel_ThirstPower() { return GetRel(eCondTypeThirst, eCondTypePower); }
 
     /**************** SETREL user functions ****************/
 
@@ -260,6 +316,12 @@ public:
     }
     void SetRel_RadiationHealth(float value) { SetRel(eCondTypeRadiation, eCondTypeHealth, value); }
     void SetRel_BleedingHealth(float value) { SetRel(eCondTypeBleeding, eCondTypeHealth, value); }
+    void SetRel_SatietyHealth(float value) { SetRel(eCondTypeSatiety, eCondTypeHealth, value); }
+    void SetRel_ThirstHealth(float value) { SetRel(eCondTypeThirst, eCondTypeHealth, value); }
+    void SetRel_RadiationPower(float value) { SetRel(eCondTypeRadiation, eCondTypePower, value); }
+    void SetRel_BleedingPower(float value) { SetRel(eCondTypeBleeding, eCondTypePower, value); }
+    void SetRel_SatietyPower(float value) { SetRel(eCondTypeSatiety, eCondTypePower, value); }
+    void SetRel_ThirstPower(float value) { SetRel(eCondTypeThirst, eCondTypePower, value); }
 
     /**************** OTHER user functions ****************/
     IC float GetHealthLost() const { return m_fHealthLost; }
@@ -297,7 +359,6 @@ protected:
     float HitPowerEffect(float power_loss);
 
     // для подсчета состояния открытых ран, запоминается кость куда был нанесен хит и скорость потери крови из раны
-    
     WOUND_VECTOR m_WoundVector;
 
     // величины
@@ -335,7 +396,6 @@ protected:
 private:
     void reinit_deltas();
     void reinit_vals();
-    void reinit_vals_UI();
 
     CEntityAlive* m_object;
 };

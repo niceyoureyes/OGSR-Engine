@@ -87,44 +87,18 @@ void CActorCondition::LoadCondition(LPCSTR entity_section)
     R_ASSERT(m_fCantSprintPowerBegin <= m_fCantSprintPowerEnd);
 
     m_fPowerLeakSpeed = pSettings->r_float(section, "max_power_leak_speed");
-
-    m_fV_Alcohol = pSettings->r_float(section, "alcohol_v");
-    m_fV_Power = READ_IF_EXISTS(pSettings, r_float, section, "power_v", 0.0f);
-
-    m_fV_Satiety = pSettings->r_float(section, "satiety_v");
-    m_fV_SatietyPower = pSettings->r_float(section, "satiety_power_v");
-    m_fV_SatietyHealth = pSettings->r_float(section, "satiety_health_v");
-
-    m_fSatietyLightLimit = READ_IF_EXISTS(pSettings, r_float, section, "satiety_light_limit", 0.0f);
-    clamp(m_fSatietyLightLimit, 0.0f, 1.0f);
-
-    m_fSatietyCriticalLimit = READ_IF_EXISTS(pSettings, r_float, section, "satiety_critical_limit", 0.0f);
-    clamp(m_fSatietyCriticalLimit, 0.0f, 1.0f);
-
-    if (m_fSatietyCriticalLimit > m_fSatietyLightLimit)
-    {
-        m_fSatietyCriticalLimit = m_fSatietyLightLimit;
-    }
-
-    if (Core.Features.test(xrCore::Feature::actor_thirst))
-    {
-        m_fThirstLightLimit = READ_IF_EXISTS(pSettings, r_float, section, "thirst_light_limit", 0.0f);
-        clamp(m_fThirstLightLimit, 0.0f, 1.0f);
-
-        m_fThirstCriticalLimit = READ_IF_EXISTS(pSettings, r_float, section, "thirst_critical_limit", 0.0f);
-        clamp(m_fThirstCriticalLimit, 0.0f, 1.0f);
-
-        if (m_fThirstCriticalLimit > m_fThirstLightLimit)
-        {
-            m_fThirstCriticalLimit = m_fThirstLightLimit;
-        }
-
-        m_fV_Thirst = pSettings->r_float(section, "thirst_v");
-        m_fV_ThirstPower = pSettings->r_float(section, "thirst_power_v");
-        m_fV_ThirstHealth = pSettings->r_float(section, "thirst_health_v");
-    }
-
     m_MaxWalkWeight = pSettings->r_float(section, "max_walk_weight");
+
+    SetSpeedAlcohol(pSettings->r_float(section, "alcohol_v"));
+    SetSpeedPower(READ_IF_EXISTS(pSettings, r_float, section, "power_v", 0.0f));
+
+    SetSpeedSatiety(pSettings->r_float(section, "satiety_v"));
+    SetRel_SatietyPower(pSettings->r_float(section, "satiety_power_v"));
+    SetRel_SatietyHealth(pSettings->r_float(section, "satiety_health_v"));
+    
+    SetSpeedThirst(pSettings->r_float(section, "thirst_v"));
+    SetRel_ThirstPower(pSettings->r_float(section, "thirst_power_v"));
+    SetRel_ThirstHealth(pSettings->r_float(section, "thirst_health_v"));
 }
 
 //вычисление параметров с ходом времени
@@ -172,10 +146,7 @@ void CActorCondition::UpdateCondition()
             k_max_power = 1.0f;
 
         SetMaxPower(GetMaxPower() - m_fPowerLeakSpeed * m_fDeltaTime * k_max_power);
-    }    
-
-    m_fAlcohol += m_fV_Alcohol * m_fDeltaTime;
-    clamp(m_fAlcohol, 0.0f, 1.0f);
+    }
 
     CEffectorCam* ce = Actor()->Cameras().GetCamEffector((ECamEffectorType)effAlcohol);
     if ((m_fAlcohol > 0.0001f))
@@ -213,12 +184,7 @@ void CActorCondition::UpdateCondition()
     }
 
     if (fis_zero(GetPsyHealth()))
-        health() = 0.0f;
-
-    UpdateSatiety();
-
-    if (Core.Features.test(xrCore::Feature::actor_thirst))
-        UpdateThirst();
+        SetHealth(0.0f);
 
     inherited::UpdateCondition();
 
@@ -451,20 +417,6 @@ void CActorCondition::reinit()
     m_fSatiety = 1.f;
     m_fAlcohol = 0.f;
     m_fThirst = 1.f;
-}
-
-void CActorCondition::ChangeAlcohol(float value) { m_fAlcohol += value; }
-
-void CActorCondition::ChangeSatiety(float value)
-{
-    m_fSatiety += value;
-    clamp(m_fSatiety, 0.0f, 1.0f);
-}
-
-void CActorCondition::ChangeThirst(float value)
-{
-    m_fThirst += value;
-    clamp(m_fThirst, 0.0f, 1.0f);
 }
 
 void CActorCondition::UpdateTutorialThresholds()

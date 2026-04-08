@@ -40,8 +40,6 @@ public:
 private:
     CActor* m_object;
     void UpdateTutorialThresholds();
-    void UpdateSatiety();
-    void UpdateThirst();
 
 public:
     CActorCondition(CActor* object);
@@ -53,10 +51,6 @@ public:
     virtual CWound* ConditionHit(SHit* pHDS);
     virtual void UpdateCondition();
 
-    virtual void ChangeAlcohol(float value);
-    virtual void ChangeSatiety(float value);
-    virtual void ChangeThirst(float value);
-
     // хромание при потере сил и здоровья
     virtual bool IsLimping();
     virtual bool IsCantWalk();
@@ -65,7 +59,6 @@ public:
     virtual bool IsCantJump(float weight);
 
     void PowerHit(float power, bool apply_outfit);
-    virtual void UpdatePower();
 
     void ConditionJump(float weight);
     void ConditionWalk(float weight, bool accel, bool sprint);
@@ -91,23 +84,6 @@ public:
     float HitSlowmo(SHit* pHDS);
 
 protected:
-    float m_fAlcohol;
-    float m_fV_Alcohol;
-    //--
-    float m_fSatiety;
-    float m_fSatietyLightLimit;
-    float m_fSatietyCriticalLimit;
-    float m_fV_Satiety;
-    float m_fV_SatietyPower;
-    float m_fV_SatietyHealth;
-    //--
-
-    float m_fThirst;
-    float m_fThirstLightLimit;
-    float m_fThirstCriticalLimit;
-    float m_fV_Thirst;
-    float m_fV_ThirstPower;
-    float m_fV_ThirstHealth;
 
     float m_fPowerLeakSpeed;
     float m_fV_Power;

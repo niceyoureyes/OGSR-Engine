@@ -72,8 +72,7 @@ bool IsCantSprint(CActorCondition* C) { return C->m_condition_flags.test(CActorC
 
 void CScriptActor::script_register(lua_State* L)
 {
-    module(
-        L)[class_<CActorCondition>("CActorConditionBase")
+    module(L)[class_<CActorCondition>("CActorConditionBase")
                .property("health", &CActorCondition::GetHealth, &CActorCondition::SetHealth)
                .property("health_max", &CActorCondition::GetMaxHealth, &CActorCondition::SetMaxHealth)
                .property("health_restore_v", &CActorCondition::GetSpeedHealth, &CActorCondition::SetSpeedHealth)
@@ -87,13 +86,13 @@ void CScriptActor::script_register(lua_State* L)
                .property("radiation_v", &CActorCondition::GetSpeedRadiation, &CActorCondition::SetSpeedRadiation)
                .property("psy_health_v", &CActorCondition::GetSpeedPsyHealth, &CActorCondition::SetSpeedPsyHealth)
                .property("morale_v", &CActorCondition::GetSpeedEntityMorale, &CActorCondition::SetSpeedEntityMorale)
-               .def_readwrite("thirst_health_v", &CActorCondition::m_fV_ThirstHealth)
-               .def_readwrite("thirst_power_v", &CActorCondition::m_fV_ThirstPower)
-               .def_readwrite("satiety_health_v", &CActorCondition::m_fV_SatietyHealth)
-               .def_readwrite("satiety_power_v", &CActorCondition::m_fV_SatietyPower)
-               .def_readwrite("radiation_health_v", &CEntityCondition::m_fV_RadiationHealth)
-               .def_readwrite("bleeding_v", &CEntityCondition::m_fV_Bleeding)
-               .def_readwrite("wound_incarnation_v", &CEntityCondition::m_fV_WoundIncarnation)
+               .property("thirst_health_v", &CActorCondition::GetRel_ThirstHealth, &CActorCondition::SetRel_ThirstHealth)
+               .property("satiety_health_v", &CActorCondition::GetRel_SatietyHealth, &CActorCondition::SetRel_SatietyHealth)
+               .property("radiation_health_v", &CActorCondition::GetRel_RadiationHealth, &CActorCondition::SetRel_RadiationHealth)
+               .property("bleeding_v", &CActorCondition::GetRel_BleedingHealth, &CActorCondition::SetRel_BleedingHealth)
+               .property("thirst_power_v", &CActorCondition::GetRel_ThirstPower, &CActorCondition::SetRel_ThirstPower)
+               .property("satiety_power_v", &CActorCondition::GetRel_SatietyPower, &CActorCondition::SetRel_SatietyPower)
+               .property("wound_incarnation_v", &CActorCondition::GetSpeedBleeding, &CEntityCondition::SetSpeedBleeding)
                .def_readwrite("max_power_leak_speed", &CActorCondition::m_fPowerLeakSpeed)
                .def_readwrite("jump_power", &CActorCondition::m_fJumpPower)
                .def_readwrite("stand_power", &CActorCondition::m_fStandPower)
@@ -118,20 +117,19 @@ void CScriptActor::script_register(lua_State* L)
                .property("cant_walk", &IsCantWalk)
                .property("cant_sprint", &IsCantSprint)
                .def("get_wound_size", &get_wound_size)
-               .def("get_wound_total_size", &get_wound_total_size)
-               //.property("class_name", &get_lua_class_name)
-           ,
-           class_<CActorConditionObject, bases<CActorCondition, CEntityCondition>>("CActorCondition") // нормальное наследование свойств происходит через Ж (
-           ,
+               .def("get_wound_total_size", &get_wound_total_size),
+
+           class_<CActorConditionObject, bases<CActorCondition, CEntityCondition>>("CActorCondition"),
+           // хак с наследованием нужен для переопределения свойств. Luabind не поддерживает property getters override
+
            class_<CPHMovementControl>("CPHMovementControl")
                .def_readwrite("ph_mass", &CPHMovementControl::fMass)
                .def_readwrite("crash_speed_max", &CPHMovementControl::fMaxCrashSpeed)
                .def_readwrite("crash_speed_min", &CPHMovementControl::fMinCrashSpeed)
                .def_readwrite("collision_damage_factor", &CPHMovementControl::fCollisionDamageFactor)
                .def_readwrite("air_control_param", &CPHMovementControl::fAirControlParam)
-               .property("jump_up_velocity", &get_jump_up_velocity, &CPHMovementControl::SetJumpUpVelocity)
-               //.property("class_name", &get_lua_class_name)
-           ,
+               .property("jump_up_velocity", &get_jump_up_velocity, &CPHMovementControl::SetJumpUpVelocity),
+
            class_<CActor, bases<CInventoryOwner, CGameObject>>("CActorBase")
                .property("condition", &get_actor_condition)
                .property("immunities", &get_immunities)
@@ -159,12 +157,10 @@ void CScriptActor::script_register(lua_State* L)
                .property("state", &get_actor_state)
                .property("orientation", &get_actor_orientation)
 
-               // Real Wolf. Start. 14.10.2014.
                .def("press_action", &CActor::IR_OnKeyboardPress)
                .def("hold_action", &CActor::IR_OnKeyboardHold)
                .def("release_action", &CActor::IR_OnKeyboardRelease)
                .def("is_zoom_aiming_mode", &CActor::IsZoomAimingMode)
-               // Real Wolf. End. 14.10.2014.
 
                .def("get_body_state", &CActor::get_state)
                .def("is_actor_normal", &CActor::is_actor_normal)
@@ -180,7 +176,8 @@ void CScriptActor::script_register(lua_State* L)
                .def("is_actor_moving", &CActor::is_actor_moving)
                .def("UpdateArtefactsOnBelt", &CActor::UpdateArtefactsOnBelt)
                .def("IsDetectorActive", &CActor::IsDetectorActive),
-           class_<CActorObject, bases<CActor, CEntityAlive>>("CActor") // хак с наследованием нужен для переопределения свойств. Luabind не поддерживает property getters override
 
+           class_<CActorObject, bases<CActor, CEntityAlive>>("CActor")
+           // хак с наследованием нужен для переопределения свойств. Luabind не поддерживает property getters override
     ];
 }
