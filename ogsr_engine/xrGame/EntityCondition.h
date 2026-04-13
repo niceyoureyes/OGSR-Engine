@@ -34,8 +34,8 @@ public:
     IC float GetMaxHealth() const { return m_fHealthMax; }
     IC float& health() { return m_fHealth; }
     IC float& max_health() { return m_fHealthMax; }
-    float SetHealth(float val) { m_fHealth = val; }
-    float SetMaxHealth(float val) { m_fHealthMax = val; }
+    void SetHealth(float val) { m_fHealth = val; }
+    void SetMaxHealth(float val) { m_fHealthMax = val; }
 
 private:
     float m_fHealth;
@@ -205,13 +205,13 @@ public:
             m_conds[val_type].cur = value;
         }
     }
-    float SetPower(float value) { SetValue(eCondTypePower, value); }
-    float SetRadiation(float value) { SetValue(eCondTypeRadiation, value); }
-    float SetPsyHealth(float value) { SetValue(eCondTypePsyHealth, value); }
-    float SetAlcohol(float value) { SetValue(eCondTypeAlcohol, value); }
-    float SetSatiety(float value) { SetValue(eCondTypeSatiety, value); }
-    float SetThirst(float value) { SetValue(eCondTypeThirst, value); }
-    float SetEntityMorale(float value) { SetValue(eCondTypeMorale, value); }
+    void SetPower(float value) { SetValue(eCondTypePower, value); }
+    void SetRadiation(float value) { SetValue(eCondTypeRadiation, value); }
+    void SetPsyHealth(float value) { SetValue(eCondTypePsyHealth, value); }
+    void SetAlcohol(float value) { SetValue(eCondTypeAlcohol, value); }
+    void SetSatiety(float value) { SetValue(eCondTypeSatiety, value); }
+    void SetThirst(float value) { SetValue(eCondTypeThirst, value); }
+    void SetEntityMorale(float value) { SetValue(eCondTypeMorale, value); }
 
     //max
     void SetMaxValue(ECondType val_type, float value)
@@ -302,18 +302,27 @@ public:
     
     /**************** GETREL user functions ****************/
 
-    float GetRel(ECondType from_type, ECondType to_type)
+    IC float GetRel(ECondType from_type, ECondType to_type) const
     {
-        return m_conds_rel[std::make_pair(from_type, to_type)];
+        auto found = m_conds_rel.find(std::make_pair(from_type, to_type));
+
+        if (found != m_conds_rel.end())
+        {
+            return found->second;
+        }
+        else
+        {
+            return 0;
+        }
     }
-    float GetRel_RadiationHealth() { return GetRel(eCondTypeRadiation, eCondTypeHealth); }
-    float GetRel_BleedingHealth() { return GetRel(eCondTypeBleeding, eCondTypeHealth); }
-    float GetRel_SatietyHealth() { return GetRel(eCondTypeSatiety, eCondTypeHealth); }
-    float GetRel_ThirstHealth() { return GetRel(eCondTypeThirst, eCondTypeHealth); }
-    float GetRel_RadiationPower() { return GetRel(eCondTypeRadiation, eCondTypePower); }
-    float GetRel_BleedingPower() { return GetRel(eCondTypeBleeding, eCondTypePower); }
-    float GetRel_SatietyPower() { return GetRel(eCondTypeSatiety, eCondTypePower); }
-    float GetRel_ThirstPower() { return GetRel(eCondTypeThirst, eCondTypePower); }
+    IC float GetRel_RadiationHealth() const { return GetRel(eCondTypeRadiation, eCondTypeHealth); }
+    IC float GetRel_BleedingHealth() const { return GetRel(eCondTypeBleeding, eCondTypeHealth); }
+    IC float GetRel_SatietyHealth() const { return GetRel(eCondTypeSatiety, eCondTypeHealth); }
+    IC float GetRel_ThirstHealth() const { return GetRel(eCondTypeThirst, eCondTypeHealth); }
+    IC float GetRel_RadiationPower() const { return GetRel(eCondTypeRadiation, eCondTypePower); }
+    IC float GetRel_BleedingPower() const { return GetRel(eCondTypeBleeding, eCondTypePower); }
+    IC float GetRel_SatietyPower() const { return GetRel(eCondTypeSatiety, eCondTypePower); }
+    IC float GetRel_ThirstPower() const { return GetRel(eCondTypeThirst, eCondTypePower); }
 
     /**************** SETREL user functions ****************/
 
