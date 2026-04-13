@@ -16,26 +16,32 @@
 #include "weapon.h"
 #include "PDA.h"
 #include "ai/monsters/BaseMonster/base_monster.h"
-
-#define MAX_SATIETY 1.0f
-#define START_SATIETY 0.5f
+#include "UI.h"
+#include "HUDManager.h"
 
 BOOL GodMode() { return psActorFlags.test(AF_GODMODE); }
 
 CActorCondition::CActorCondition(CActor* object) : inherited(object)
-{
+{    
+    m_conds_active[eCondTypeHealth] = 1;
+    m_conds_active[eCondTypePower] = 1;
+    m_conds_active[eCondTypeBleeding] = 1;
+    m_conds_active[eCondTypeRadiation] = 1;
+    m_conds_active[eCondTypePsyHealth] = 1;
+    m_conds_active[eCondTypeAlcohol] = 1;
+    m_conds_active[eCondTypeSatiety] = 1;
+    m_conds_active[eCondTypeThirst] = 1;
+    m_conds_active[eCondTypeMorale] = 1;
+
     m_fJumpPower = 0.f;
-    m_fStandPower = 0.f;
     m_fWalkPower = 0.f;
+    m_fStandPower = 0.f;
     m_fJumpWeightPower = 0.f;
     m_fWalkWeightPower = 0.f;
-    m_fOverweightWalkK = 0.f;
     m_fOverweightJumpK = 0.f;
+    m_fOverweightWalkK = 0.f;
     m_fAccelK = 0.f;
     m_fSprintK = 0.f;
-    m_fAlcohol = 0.f;
-    m_fSatiety = 1.0f;
-    m_fThirst = 1.0f;
 
     m_bJumpRequirePower = false;
 
@@ -58,18 +64,18 @@ void CActorCondition::LoadCondition(LPCSTR entity_section)
     LPCSTR section = READ_IF_EXISTS(pSettings, r_string, entity_section, "condition_sect", entity_section);
 
     m_fJumpPower = pSettings->r_float(section, "jump_power");
-    m_fStandPower = pSettings->r_float(section, "stand_power");
     m_fWalkPower = pSettings->r_float(section, "walk_power");
+    m_fStandPower = pSettings->r_float(section, "stand_power");
     m_fJumpWeightPower = pSettings->r_float(section, "jump_weight_power");
     m_fWalkWeightPower = pSettings->r_float(section, "walk_weight_power");
-    m_fOverweightWalkK = pSettings->r_float(section, "overweight_walk_k");
     m_fOverweightJumpK = pSettings->r_float(section, "overweight_jump_k");
+    m_fOverweightWalkK = pSettings->r_float(section, "overweight_walk_k");
     m_fAccelK = pSettings->r_float(section, "accel_k");
     m_fSprintK = pSettings->r_float(section, "sprint_k");
 
     m_bJumpRequirePower = READ_IF_EXISTS(pSettings, r_bool, section, "jump_require_power", false);
 
-    //порог силы и здоровья меньше которого актер начинает хромать
+    // порог силы и здоровья меньше которого актер начинает хромать
     m_fLimpingHealthBegin = pSettings->r_float(section, "limping_health_begin");
     m_fLimpingHealthEnd = pSettings->r_float(section, "limping_health_end");
     R_ASSERT(m_fLimpingHealthBegin <= m_fLimpingHealthEnd);
@@ -100,10 +106,6 @@ void CActorCondition::LoadCondition(LPCSTR entity_section)
     SetRel_ThirstPower(pSettings->r_float(section, "thirst_power_v"));
     SetRel_ThirstHealth(pSettings->r_float(section, "thirst_health_v"));
 }
-
-//вычисление параметров с ходом времени
-#include "UI.h"
-#include "HUDManager.h"
 
 void CActorCondition::UpdateCondition()
 {
@@ -149,7 +151,7 @@ void CActorCondition::UpdateCondition()
     }
 
     CEffectorCam* ce = Actor()->Cameras().GetCamEffector((ECamEffectorType)effAlcohol);
-    if ((m_fAlcohol > 0.0001f))
+    if ((GetAlcohol() > 0.0001f))
     {
         if (!ce)
         {
@@ -387,10 +389,10 @@ extern bool g_bShowHudInfo;
 void CActorCondition::save(NET_Packet& output_packet)
 {
     inherited::save(output_packet);
-    save_data(m_fAlcohol, output_packet);
+    save_data(m_conds[eCondTypeAlcohol].cur, output_packet);
     save_data(m_condition_flags, output_packet);
-    save_data(m_fSatiety, output_packet);
-    save_data(m_fThirst, output_packet);
+    save_data(m_conds[eCondTypeSatiety].cur, output_packet);
+    save_data(m_conds[eCondTypeThirst].cur, output_packet);
 }
 
 #include "alife_registry_wrappers.h"
@@ -399,13 +401,10 @@ void CActorCondition::save(NET_Packet& output_packet)
 void CActorCondition::load(IReader& input_packet)
 {
     inherited::load(input_packet);
-    load_data(m_fAlcohol, input_packet);
+    load_data(m_conds[eCondTypeAlcohol].cur, input_packet);
     load_data(m_condition_flags, input_packet);
-    load_data(m_fSatiety, input_packet);
-    if (ai().get_alife()->header().version() > 8)
-    {
-        load_data(m_fThirst, input_packet);
-    }
+    load_data(m_conds[eCondTypeSatiety].cur, input_packet);
+    load_data(m_conds[eCondTypeThirst].cur, input_packet);
 }
 
 void CActorCondition::reinit()
@@ -414,9 +413,6 @@ void CActorCondition::reinit()
     m_condition_flags.set(eLimping, FALSE);
     m_condition_flags.set(eCantWalk, FALSE);
     m_condition_flags.set(eCantSprint, FALSE);
-    m_fSatiety = 1.f;
-    m_fAlcohol = 0.f;
-    m_fThirst = 1.f;
 }
 
 void CActorCondition::UpdateTutorialThresholds()

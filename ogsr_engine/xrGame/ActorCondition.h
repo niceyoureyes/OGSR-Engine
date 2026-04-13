@@ -1,5 +1,4 @@
 // ActorCondition.h: класс состояния игрока
-//
 
 #pragma once
 
@@ -18,37 +17,39 @@ class CActorCondition : public CEntityCondition
 
 public:
     typedef CEntityCondition inherited;
+
     enum
     {
-        eCriticalPowerReached = (1 << 0),
-        eCriticalMaxPowerReached = (1 << 1),
-        eCriticalBleedingSpeed = (1 << 2),
-        eCriticalSatietyReached = (1 << 3),
+        eCriticalPowerReached     = (1 << 0),
+        eCriticalMaxPowerReached  = (1 << 1),
+        eCriticalBleedingSpeed    = (1 << 2),
+        eCriticalSatietyReached   = (1 << 3),
         eCriticalRadiationReached = (1 << 4),
-        eWeaponJammedReached = (1 << 5),
-        ePhyHealthMinReached = (1 << 6),
-        eCantWalkWeight = (1 << 7),
-
-        eLimping = (1 << 8),
-        eCantWalk = (1 << 9),
-        eCantSprint = (1 << 10),
-
-        eCriticalThirstReached = (1 << 11),
+        eWeaponJammedReached      = (1 << 5),
+        ePhyHealthMinReached      = (1 << 6),
+        eCantWalkWeight           = (1 << 7),
+        eLimping                  = (1 << 8),
+        eCantWalk                 = (1 << 9),
+        eCantSprint               = (1 << 10),
+        eCriticalThirstReached    = (1 << 11),
     };
-    Flags16 m_condition_flags;
 
-private:
-    CActor* m_object;
-    void UpdateTutorialThresholds();
-
-public:
     CActorCondition(CActor* object);
     virtual ~CActorCondition(void);
-
-    virtual void LoadCondition(LPCSTR section);
+    IC CActor& object() const { VERIFY(m_object); return (*m_object); }
     virtual void reinit();
 
+    /**************** BASE functions ****************/
+    virtual void LoadCondition(LPCSTR section);
+    virtual void save(NET_Packet& output_packet);
+    virtual void load(IReader& input_packet);
+
+    /**************** OTHER user functions ****************/
     virtual CWound* ConditionHit(SHit* pHDS);
+    void PowerHit(float power, bool apply_outfit);
+    float HitSlowmo(SHit* pHDS);
+
+    // Обновления состояния с течением времени
     virtual void UpdateCondition();
 
     // хромание при потере сил и здоровья
@@ -58,36 +59,30 @@ public:
     virtual bool IsCantSprint();
     virtual bool IsCantJump(float weight);
 
-    void PowerHit(float power, bool apply_outfit);
-
-    void ConditionJump(float weight);
-    void ConditionWalk(float weight, bool accel, bool sprint);
     void ConditionStand(float weight);
+    void ConditionWalk(float weight, bool accel, bool sprint);
+    void ConditionJump(float weight);
 
-    float GetPsy() { return 1.0f - GetPsyHealth(); }
     void SetMaxWalkWeight(float _weight) { m_MaxWalkWeight = _weight; }
 
+    bool DisableSprint(SHit* pHDS);
+
+    // новое непонятное
     void AffectDamage_InjuriousMaterialAndMonstersInfluence();
     float GetInjuriousMaterialDamage();
 
-public:
-    IC CActor& object() const
+    void net_Relcase(CObject* O);
+    void set_monsters_aura_radius(float r)
     {
-        VERIFY(m_object);
-        return (*m_object);
-    }
-    virtual void save(NET_Packet& output_packet);
-    virtual void load(IReader& input_packet);
-    float m_MaxWalkWeight;
+        if (r > monsters_aura_radius)
+            monsters_aura_radius = r;
+    };
 
-    bool DisableSprint(SHit* pHDS);
-    float HitSlowmo(SHit* pHDS);
+    float m_MaxWalkWeight;
+    Flags16 m_condition_flags;
 
 protected:
-
     float m_fPowerLeakSpeed;
-    float m_fV_Power;
-
     float m_fJumpPower;
     float m_fStandPower;
     float m_fWalkPower;
@@ -118,11 +113,7 @@ protected:
     Feel::Touch* monsters_feel_touch;
     float monsters_aura_radius;
 
-public:
-    void net_Relcase(CObject* O);
-    void set_monsters_aura_radius(float r)
-    {
-        if (r > monsters_aura_radius)
-            monsters_aura_radius = r;
-    };
+private:
+    CActor* m_object;
+    void UpdateTutorialThresholds();
 };

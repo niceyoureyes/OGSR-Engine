@@ -125,7 +125,8 @@ void CStateBloodsuckerVampireExecuteAbstract::cleanup()
     {
         const CEntityAlive* enemy = object->EnemyMan.get_enemy();
         if (enemy)
-            enemy->conditions().mcondv()[eCondTypeHealth].speed += object->m_vampire_loss_health_speed;
+            enemy->conditions().SetSpeedHealth(enemy->conditions().GetSpeedHealth() + object->m_vampire_loss_health_speed);
+
         m_health_loss_activated = false;
     }
 
@@ -220,7 +221,7 @@ void CStateBloodsuckerVampireExecuteAbstract::execute_vampire_continue()
 
     if (!m_health_loss_activated && !fis_zero(object->m_vampire_loss_health_speed))
     {
-        enemy->conditions().mcondv()[eCondTypeHealth].speed -= object->m_vampire_loss_health_speed;
+        enemy->conditions().SetSpeedHealth(enemy->conditions().GetSpeedHealth() - object->m_vampire_loss_health_speed);
         m_health_loss_activated = true;
     }
 
@@ -241,7 +242,7 @@ void CStateBloodsuckerVampireExecuteAbstract::execute_vampire_hit()
 
     if (m_health_loss_activated)
     {
-        enemy->conditions().mcondv()[eCondTypeHealth].speed += object->m_vampire_loss_health_speed;
+        enemy->conditions().SetSpeedHealth(enemy->conditions().GetSpeedHealth() + object->m_vampire_loss_health_speed);
         m_health_loss_activated = false;
     }
 

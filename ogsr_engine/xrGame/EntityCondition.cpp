@@ -84,15 +84,15 @@ void CEntityCondition::reinit_vals()
 
     m_conds[eCondTypeAlcohol].cur = 0.0;
     m_conds[eCondTypeAlcohol].min = 0.0;
-    m_conds[eCondTypeAlcohol].max = 0.0;
+    m_conds[eCondTypeAlcohol].max = 1.0;
 
-    m_conds[eCondTypeSatiety].cur = 0.0;
+    m_conds[eCondTypeSatiety].cur = 1.0;
     m_conds[eCondTypeSatiety].min = 0.0;
-    m_conds[eCondTypeSatiety].max = 0.0;
+    m_conds[eCondTypeSatiety].max = 1.0;
 
-    m_conds[eCondTypeThirst].cur = 0.0;
+    m_conds[eCondTypeThirst].cur = 1.0;
     m_conds[eCondTypeThirst].min = 0.0;
-    m_conds[eCondTypeThirst].max = 0.0;
+    m_conds[eCondTypeThirst].max = 1.0;
 
     m_conds[eCondTypeMorale].cur = 1.f;
     m_conds[eCondTypeMorale].min = 0.0;
@@ -228,6 +228,7 @@ void CEntityCondition::UpdateCondition()
         ChangeSpeedTotalValue(etype, GetSpeedValue(etype));
 
         // Immediate delta + Time delta
+        m_conds[etype].speed_total_UI = GetSpeedTotalValue(etype);
         ChangeValue(etype, m_fDeltaTime * GetSpeedTotalValue(etype));
 
         // Final update and clear

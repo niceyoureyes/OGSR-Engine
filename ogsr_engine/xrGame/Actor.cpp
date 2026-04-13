@@ -23,11 +23,9 @@
 #include "CustomOutfit.h"
 #include "actorcondition.h"
 #include "UIGameCustom.h"
-
 // breakpoints
 #include "../xr_3da/xr_input.h"
-
-//
+// breakpoints
 #include "Actor.h"
 #include "actor_anim_defs.h"
 #include "HudItem.h"

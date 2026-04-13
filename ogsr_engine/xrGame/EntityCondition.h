@@ -20,6 +20,7 @@ struct SEntityConditionVal
     float max;
     float speed;
     float speed_total;
+    float speed_total_UI;
     float deltas;
 };
 
@@ -47,6 +48,7 @@ public:
     typedef std::pair<ECondType, ECondType> cond_pair;
     typedef std::pair<std::vector<float>, std::vector<float>> scalers;
     typedef std::map<cond_pair, scalers> scale_store;
+
     CondScaler() {}
     virtual ~CondScaler() {};
 
@@ -182,6 +184,11 @@ public:
     IC float GetSpeedTotalThirst() const { return GetSpeedTotalValue(eCondTypeThirst); }
     IC float GetSpeedTotalEntityMorale() const { return GetSpeedTotalValue(eCondTypeMorale); }
 
+    //speed total UI
+    IC float GetSpeedTotalUIValue(ECondType val_type) const
+    {
+        return m_conds[val_type].speed_total_UI;
+    }
     /**************** SET user functions ****************/
 
     //current
@@ -324,7 +331,7 @@ public:
     void SetRel_ThirstPower(float value) { SetRel(eCondTypeThirst, eCondTypePower, value); }
 
     /**************** OTHER user functions ****************/
-    IC float GetHealthLost() const { return m_fHealthLost; }
+    IC float GetPsy() const { return 1.0f - GetPsyHealth(); }
     virtual CWound* ConditionHit(SHit* pHDS);
     IC const float fdelta_time() const { return (m_fDeltaTime); }
     IC float& hit_bone_scale() { return (m_fHitBoneScale); }

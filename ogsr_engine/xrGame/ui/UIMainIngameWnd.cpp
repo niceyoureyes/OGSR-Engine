@@ -434,36 +434,14 @@ void CUIMainIngameWnd::Update()
     UIHealthBar.SetProgressPos(m_pActor->GetfHealth() * 100.0f);
     UIMotionIcon.SetPower(m_pActor->conditions().GetPower() * 100.0f);
 
-    m_pActor->ActiveArtefactsOnBelt().HealthRestoreSpeed;
-
-
-    Actor()->ActiveArtefactsOnBelt().HealthRestoreSpeed
-
-    static std::deque<float> q;
-    static SEntityConditionUI conds_UI = {0, 0};
-    static float hspeed = 0;
+    long long hp_val = (long long)(m_pActor->conditions().GetHealth() * 1000);
+    long long hp_valmax = (long long)(m_pActor->conditions().GetMaxHealth() * 1000);
+    float hp_restore_arts = m_pActor->ActiveArtefactsOnBelt().HealthRestoreSpeed;
+    float hp_restore_base = m_pActor->conditions().GetSpeedTotalUIValue(eCondTypeHealth);
+    float hp_restore_tota = hp_restore_arts + hp_restore_base;
 
     string128 _buff;
-    long long cval = (long long)(m_pActor->conditions().GetHealth() * 1000);
-    long long cvalmax = (long long)(m_pActor->conditions().GetMaxHealth() * 1000);
-    SEntityConditionUI &newdiff = m_pActor->conditions().mcondv_UI()[eCondTypeHealth];
-
-    q.push_back((newdiff.passed_time > 0.0f) ? newdiff.accum_val / newdiff.passed_time : 0.0f);
-    //conds_UI.accum_val += newdiff.accum_val;
-    //conds_UI.passed_time += newdiff.passed_time;
-    newdiff.accum_val = 0;
-    newdiff.passed_time = 0;
-
-    if (q.size() > 20)
-    {
-        //conds_UI.accum_val -= q.front().accum_val;
-        //conds_UI.passed_time -= q.front().passed_time;
-        q.pop_front();
-    }
-
-    hspeed = *std::max_element(q.begin(), q.end());
-
-    sprintf_s(_buff, sizeof(_buff), "%04lld/%04lld %s%.6f", cval, cvalmax, (hspeed >= 0 ? "+" : ""), hspeed);
+    sprintf_s(_buff, sizeof(_buff), "%04lld/%04lld %s%.6f", hp_val, hp_valmax, (hp_restore_tota >= 0 ? "+" : ""), hp_restore_tota);
 
     UIHealthBar.m_UIProgressItem.SetVTextAlignment(valCenter);
     UIHealthBar.m_UIProgressItem.SetText(_buff);
